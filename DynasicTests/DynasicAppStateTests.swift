@@ -21,4 +21,29 @@ final class DynasicAppStateTests: XCTestCase {
         state.hideLyrics()
         XCTAssertFalse(state.isLyricsVisible)
     }
+
+    func testSettingsPersistAcrossStateInstances() {
+        let defaults = UserDefaults(suiteName: "dynasic-settings-\(UUID().uuidString)")!
+        let firstState = DynasicAppState(userDefaults: defaults)
+
+        firstState.lyricsOffset = 1.25
+        firstState.lyricsFontSize = 30
+        firstState.lyricsOpacity = 0.7
+        firstState.lyricsAlignment = .trailing
+        firstState.isClickThrough = true
+        firstState.isAlwaysOnTop = false
+        firstState.showsPreviousLine = false
+        firstState.showsNextLine = false
+
+        let secondState = DynasicAppState(userDefaults: defaults)
+
+        XCTAssertEqual(secondState.lyricsOffset, 1.25)
+        XCTAssertEqual(secondState.lyricsFontSize, 30)
+        XCTAssertEqual(secondState.lyricsOpacity, 0.7)
+        XCTAssertEqual(secondState.lyricsAlignment, .trailing)
+        XCTAssertTrue(secondState.isClickThrough)
+        XCTAssertFalse(secondState.isAlwaysOnTop)
+        XCTAssertFalse(secondState.showsPreviousLine)
+        XCTAssertFalse(secondState.showsNextLine)
+    }
 }

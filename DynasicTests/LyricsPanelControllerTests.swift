@@ -39,4 +39,21 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
         XCTAssertTrue(panel.isMovableByWindowBackground)
     }
+
+    func testPanelAppliesLiveInteractionSettings() {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+
+        state.showLyrics()
+        let controller = try! XCTUnwrap(state.panelControllerForTesting)
+        let panel = try! XCTUnwrap(controller.panelForTesting)
+
+        state.isClickThrough = true
+        state.isAlwaysOnTop = false
+
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertFalse(panel.isFloatingPanel)
+        XCTAssertEqual(panel.level, .normal)
+        state.hideLyrics()
+    }
 }

@@ -56,13 +56,38 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Slider(value: $state.lyricsOffset, in: -5...5, step: 0.05) {
-                Text("Lyrics Offset")
+            Section("Lyrics") {
+                Slider(value: $state.lyricsFontSize, in: 12...48, step: 1) {
+                    Text("Font Size")
+                }
+                Text("\(state.lyricsFontSize, specifier: "%.0f") pt")
+
+                Slider(value: $state.lyricsOpacity, in: 0.2...1, step: 0.05) {
+                    Text("Opacity")
+                }
+                Text("\(state.lyricsOpacity * 100, specifier: "%.0f")%")
+
+                Picker("Alignment", selection: $state.lyricsAlignment) {
+                    ForEach(LyricsPanelAlignment.allCases) { alignment in
+                        Text(alignment.title).tag(alignment)
+                    }
+                }
+
+                Slider(value: $state.lyricsOffset, in: -5...5, step: 0.05) {
+                    Text("Lyrics Offset")
+                }
+                Text("\(state.lyricsOffset, specifier: "%.2f") sec")
             }
-            Text("\(state.lyricsOffset, specifier: "%.2f") sec")
+
+            Section("Panel") {
+                Toggle("Click-through", isOn: $state.isClickThrough)
+                Toggle("Always on top", isOn: $state.isAlwaysOnTop)
+                Toggle("Show previous line", isOn: $state.showsPreviousLine)
+                Toggle("Show next line", isOn: $state.showsNextLine)
+            }
         }
         .padding()
-        .frame(width: 320)
+        .frame(width: 360)
     }
 }
 

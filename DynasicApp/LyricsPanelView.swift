@@ -5,19 +5,20 @@ struct LyricsPanelView: View {
     @ObservedObject var state: DynasicAppState
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: horizontalAlignment, spacing: 6) {
             if let lines = selectedLines {
-                if let previous = lines.previous {
+                if state.showsPreviousLine, let previous = lines.previous {
                     Text(previous.text)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
                 Text(lines.current)
-                    .font(.title2.weight(.semibold))
+                    .font(.system(size: state.lyricsFontSize, weight: .semibold))
                     .lineLimit(2)
+                    .multilineTextAlignment(textAlignment)
 
-                if let next = lines.next {
+                if state.showsNextLine, let next = lines.next {
                     Text(next.text)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -32,6 +33,29 @@ struct LyricsPanelView: View {
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
+        .opacity(state.lyricsOpacity)
+    }
+
+    private var horizontalAlignment: HorizontalAlignment {
+        switch state.lyricsAlignment {
+        case .leading:
+            return .leading
+        case .center:
+            return .center
+        case .trailing:
+            return .trailing
+        }
+    }
+
+    private var textAlignment: TextAlignment {
+        switch state.lyricsAlignment {
+        case .leading:
+            return .leading
+        case .center:
+            return .center
+        case .trailing:
+            return .trailing
+        }
     }
 
     private var selectedLines: (previous: LyricLine?, current: String, next: LyricLine?)? {

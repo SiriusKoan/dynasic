@@ -38,6 +38,11 @@ final class LyricsPanelController {
         panel?.ignoresMouseEvents = enabled
     }
 
+    func setAlwaysOnTop(_ enabled: Bool) {
+        panel?.isFloatingPanel = enabled
+        panel?.level = enabled ? .floating : .normal
+    }
+
     var isVisible: Bool {
         panel?.isVisible == true
     }
@@ -57,7 +62,9 @@ final class LyricsPanelController {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.level = state.isAlwaysOnTop ? .floating : .normal
+        panel.ignoresMouseEvents = state.isClickThrough
+        panel.isFloatingPanel = state.isAlwaysOnTop
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
