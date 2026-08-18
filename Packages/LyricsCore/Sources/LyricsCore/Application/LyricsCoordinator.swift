@@ -38,7 +38,8 @@ public actor LyricsCoordinator {
     public func process(snapshot: PlaybackSnapshot) async {
         playbackClock.synchronize(
             position: snapshot.position,
-            state: snapshot.state
+            state: snapshot.state,
+            observationLatency: snapshot.observationLatency
         )
 
         guard let track = snapshot.track else {
@@ -57,7 +58,8 @@ public actor LyricsCoordinator {
     }
 
     public func currentState() -> LyricsViewState {
-        state
+        refreshDisplayedState()
+        return state
     }
 
     public func currentPosition() -> TimeInterval? {

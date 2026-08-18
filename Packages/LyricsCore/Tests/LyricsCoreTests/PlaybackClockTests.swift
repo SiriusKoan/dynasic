@@ -63,6 +63,21 @@ func newSnapshotCorrectsSmallDrift() {
 }
 
 @Test
+func observationLatencyIsIncludedInPlaybackEstimate() {
+    let fakeClock = FakeClock()
+    var playbackClock = PlaybackClock(timeSource: fakeClock)
+
+    fakeClock.advance(by: 1)
+    playbackClock.synchronize(
+        position: 10,
+        state: .playing,
+        observationLatency: 0.3
+    )
+
+    #expect(abs((playbackClock.currentPosition() ?? 0) - 10.3) < 0.0001)
+}
+
+@Test
 func missingPositionRemainsUnavailable() {
     let fakeClock = FakeClock()
     var playbackClock = PlaybackClock(timeSource: fakeClock)

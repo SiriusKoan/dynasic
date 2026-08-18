@@ -66,13 +66,24 @@ struct AppleMusicObservationService: AppleMusicObservationBackend, Sendable {
 
     func snapshot() async throws -> PlaybackSnapshot {
         let scriptRunner = self.scriptRunner
+        let clock = ContinuousClock()
+        let startedAt = clock.now
         let output = try await Task.detached(priority: .utility) {
             try scriptRunner.run()
         }.value
-        return try Self.parse(output)
+        let finishedAt = clock.now
+        let duration = startedAt.duration(to: finishedAt).components
+        let observationLatency = max(
+            0,
+            Double(duration.seconds) + Double(duration.attoseconds) / 1_000_000_000_000_000_000
+        )
+        return try Self.parse(output, observationLatency: observationLatency)
     }
 
-    private static func parse(_ output: String) throws -> PlaybackSnapshot {
+    private static func parse(
+        _ output: String,
+        observationLatency: TimeInterval
+    ) throws -> PlaybackSnapshot {
         var values: [String: String] = [:]
         for line in output.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
@@ -118,7 +129,8 @@ struct AppleMusicObservationService: AppleMusicObservationBackend, Sendable {
             track: track,
             state: state,
             position: timeValue(values["position"]),
-            observedAt: ContinuousClock().now
+            observedAt: ContinuousClock().now,
+            observationLatency: observationLatency
         )
     }
 

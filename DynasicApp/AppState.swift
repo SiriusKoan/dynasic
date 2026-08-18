@@ -30,6 +30,7 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var reportedPlaybackState: PlaybackState?
     @Published private(set) var reportedPlaybackPosition: TimeInterval?
     @Published private(set) var lastSnapshotAt: Date?
+    @Published private(set) var lastObservationLatency: TimeInterval?
     @Published private(set) var lastObservationError: String?
     @Published var isLyricsVisible = false
     @Published var lyricsOffset: Double {
@@ -67,6 +68,7 @@ final class DynasicAppState: ObservableObject {
     private let userDefaults: UserDefaults
     private let musicBackend: any AppleMusicObservationBackend
     private var observationTask: Task<Void, Never>?
+    private var displayTask: Task<Void, Never>?
     private var panelController: LyricsPanelController?
     private var mainWindowController: MainWindowController?
 
@@ -121,6 +123,7 @@ final class DynasicAppState: ObservableObject {
 
     deinit {
         observationTask?.cancel()
+        displayTask?.cancel()
     }
 
     func showLyrics() {
@@ -147,11 +150,24 @@ final class DynasicAppState: ObservableObject {
         guard observationTask == nil else { return }
 
         musicBackendStatus = "polling"
+        let clock = ContinuousClock()
         observationTask = Task { [weak self] in
+            var nextObservation = clock.now
             while !Task.isCancelled {
-                await self?.observeOnce()
                 do {
-                    try await Task.sleep(for: .milliseconds(300))
+                    try await clock.sleep(until: nextObservation)
+                } catch {
+                    break
+                }
+                await self?.observeOnce()
+                nextObservation += .milliseconds(300)
+            }
+        }
+        displayTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshViewStateNow()
+                do {
+                    try await Task.sleep(for: .milliseconds(50))
                 } catch {
                     break
                 }
@@ -162,6 +178,8 @@ final class DynasicAppState: ObservableObject {
     func stopObservation() {
         observationTask?.cancel()
         observationTask = nil
+        displayTask?.cancel()
+        displayTask = nil
     }
 
     var isObservationRunning: Bool {
@@ -173,12 +191,16 @@ final class DynasicAppState: ObservableObject {
     }
 
     func refreshViewState() {
-        Task { [weak self, coordinator] in
-            let state = await coordinator.currentState()
-            let position = await coordinator.currentPosition()
-            self?.viewState = state
-            self?.estimatedPlaybackPosition = position
+        Task { [weak self] in
+            await self?.refreshViewStateNow()
         }
+    }
+
+    private func refreshViewStateNow() async {
+        let state = await coordinator.currentState()
+        let position = await coordinator.currentPosition()
+        viewState = state
+        estimatedPlaybackPosition = position
     }
 
     private func observeOnce() async {
@@ -186,13 +208,13 @@ final class DynasicAppState: ObservableObject {
             let snapshot = try await musicBackend.snapshot()
             reportedPlaybackState = snapshot.state
             reportedPlaybackPosition = snapshot.position
+            lastObservationLatency = snapshot.observationLatency
             lastSnapshotAt = Date()
             lastObservationError = nil
             musicBackendStatus = "connected"
 
             await coordinator.process(snapshot: snapshot)
-            viewState = await coordinator.currentState()
-            estimatedPlaybackPosition = await coordinator.currentPosition()
+            await refreshViewStateNow()
         } catch {
             musicBackendStatus = "unavailable"
             lastObservationError = String(describing: error)
@@ -260,6 +282,7 @@ final class DynasicAppState: ObservableObject {
         --------
         reportedPosition: \(formatted(reportedPlaybackPosition))
         estimatedPosition: \(formatted(estimatedPlaybackPosition))
+        observationLatency: \(formatted(lastObservationLatency))
         drift: not exposed
         lastSnapshotAge: \(lastSnapshotAge)
 

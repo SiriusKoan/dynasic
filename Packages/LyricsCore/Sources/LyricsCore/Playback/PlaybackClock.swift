@@ -37,11 +37,14 @@ public struct PlaybackClock: Sendable {
 
     public mutating func synchronize(
         position: TimeInterval?,
-        state: PlaybackState
+        state: PlaybackState,
+        observationLatency: TimeInterval = 0
     ) {
         if let position, position.isFinite, position >= 0 {
             reportedPosition = position
-            observedMonotonicTime = timeSource.now()
+            let now = timeSource.now()
+            let latency = observationLatency.isFinite ? max(0, observationLatency) : 0
+            observedMonotonicTime = now - latency
         }
         playbackState = state
     }

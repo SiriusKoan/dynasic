@@ -30,6 +30,7 @@ final class AppleMusicObservationServiceTests: XCTestCase {
                 persistentID: "123456789"
             )
         )
+        XCTAssertGreaterThanOrEqual(snapshot.observationLatency, 0)
     }
 
     func testTrackErrorProducesSnapshotWithoutTrack() async throws {
