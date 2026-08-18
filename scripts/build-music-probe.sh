@@ -5,13 +5,14 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD_DIR="$ROOT_DIR/.build/music-probe"
 APP_DIR="$BUILD_DIR/MusicProbe.app"
 SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+TARGET_ARCH=$(uname -m)
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 swiftc \
     -parse-as-library \
-    -target arm64-apple-macosx26.5 \
+    -target "$TARGET_ARCH-apple-macosx14.0" \
     -sdk "$SDKROOT" \
     -module-cache-path "$BUILD_DIR/module-cache" \
     -framework AppKit \

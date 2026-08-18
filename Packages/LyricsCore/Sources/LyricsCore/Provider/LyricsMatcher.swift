@@ -13,13 +13,13 @@ public struct LyricsMatch: Sendable, Equatable {
 public enum LyricsMatcher {
     public static func score(track: TrackMetadata, candidate: TrackMetadata) -> Int? {
         guard titlesMatch(track.title, candidate.title),
-              normalized(track.artist) == normalized(candidate.artist) else {
+              NormalizedText.value(track.artist) == NormalizedText.value(candidate.artist) else {
             return nil
         }
 
         var score = 200
-        if let album = normalizedOptional(track.album),
-           album == normalizedOptional(candidate.album) {
+        if let album = NormalizedText.optional(track.album),
+           album == NormalizedText.optional(candidate.album) {
             score += 20
         }
 
@@ -60,23 +60,9 @@ public enum LyricsMatcher {
         return bestMatch
     }
 
-    private static func normalized(_ value: String) -> String {
-        value
-            .precomposedStringWithCanonicalMapping
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-            .lowercased()
-    }
-
-    private static func normalizedOptional(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let normalized = normalized(value)
-        return normalized.isEmpty ? nil : normalized
-    }
-
     private static func titlesMatch(_ lhs: String, _ rhs: String) -> Bool {
-        let left = normalized(lhs)
-        let right = normalized(rhs)
+        let left = NormalizedText.value(lhs)
+        let right = NormalizedText.value(rhs)
         guard !left.isEmpty, !right.isEmpty else { return false }
         if left == right { return true }
 

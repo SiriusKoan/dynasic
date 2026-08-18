@@ -22,7 +22,6 @@ swift test \
     --cache-path "$CACHE_DIR" \
     --config-path "$CONFIG_DIR" \
     --security-path "$SECURITY_DIR" \
-    --triple arm64-apple-macosx26.5 \
     -Xswiftc -F -Xswiftc "$TOOLCHAIN_FRAMEWORKS" \
     -Xlinker -F -Xlinker "$TOOLCHAIN_FRAMEWORKS" \
     -Xlinker -rpath -Xlinker "$TOOLCHAIN_FRAMEWORKS" \

@@ -7,18 +7,18 @@ struct LyricsPanelView: View {
     var body: some View {
         VStack(alignment: horizontalAlignment, spacing: 6) {
             if let lines = selectedLines {
-                if state.showsPreviousLine, let previous = lines.previous {
+                if state.settings.showsPreviousLine, let previous = lines.previous {
                     Text(previous.text)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
                 Text(lines.current)
-                    .font(.system(size: state.lyricsFontSize, weight: .semibold))
+                    .font(.system(size: state.settings.lyricsFontSize, weight: .semibold))
                     .lineLimit(2)
                     .multilineTextAlignment(textAlignment)
 
-                if state.showsNextLine, let next = lines.next {
+                if state.settings.showsNextLine, let next = lines.next {
                     Text(next.text)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -33,11 +33,11 @@ struct LyricsPanelView: View {
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
-        .opacity(state.lyricsOpacity)
+        .opacity(state.settings.lyricsOpacity)
     }
 
     private var horizontalAlignment: HorizontalAlignment {
-        switch state.lyricsAlignment {
+        switch state.settings.lyricsAlignment {
         case .leading:
             return .leading
         case .center:
@@ -48,7 +48,7 @@ struct LyricsPanelView: View {
     }
 
     private var textAlignment: TextAlignment {
-        switch state.lyricsAlignment {
+        switch state.settings.lyricsAlignment {
         case .leading:
             return .leading
         case .center:

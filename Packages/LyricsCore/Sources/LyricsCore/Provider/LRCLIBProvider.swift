@@ -29,7 +29,7 @@ public struct LRCLIBProvider: LyricsProvider, Sendable {
             return lyrics
         }
 
-        guard !normalized(track.title).isEmpty else { return nil }
+        guard !NormalizedText.value(track.title).isEmpty else { return nil }
         let records = try await fetchSearch(track: track)
         guard let bestRecord = bestRecord(for: track, records: records) else {
             return nil
@@ -42,8 +42,8 @@ public struct LRCLIBProvider: LyricsProvider, Sendable {
               let duration = track.duration,
               duration.isFinite,
               duration >= 0,
-              !normalized(track.title).isEmpty,
-              !normalized(track.artist).isEmpty else {
+              !NormalizedText.value(track.title).isEmpty,
+              !NormalizedText.value(track.artist).isEmpty else {
             return nil
         }
 
@@ -139,14 +139,6 @@ public struct LRCLIBProvider: LyricsProvider, Sendable {
     private func nonEmpty(_ value: String?) -> String? {
         guard let value else { return nil }
         return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
-    }
-
-    private func normalized(_ value: String) -> String {
-        value
-            .precomposedStringWithCanonicalMapping
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-            .lowercased()
     }
 
     private struct LRCLIBRecord: Decodable, Sendable {

@@ -62,9 +62,9 @@ final class LyricsPanelController {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isFloatingPanel = true
-        panel.level = state.isAlwaysOnTop ? .floating : .normal
-        panel.ignoresMouseEvents = state.isClickThrough
-        panel.isFloatingPanel = state.isAlwaysOnTop
+        panel.level = state.settings.isAlwaysOnTop ? .floating : .normal
+        panel.ignoresMouseEvents = state.settings.isClickThrough
+        panel.isFloatingPanel = state.settings.isAlwaysOnTop
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false

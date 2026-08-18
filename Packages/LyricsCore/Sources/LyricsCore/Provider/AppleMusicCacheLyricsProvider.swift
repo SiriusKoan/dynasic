@@ -1,5 +1,15 @@
 import Foundation
 
+protocol AppleMusicCacheRetrySleeper: Sendable {
+    func sleep(for duration: Duration) async throws
+}
+
+private struct ContinuousCacheRetrySleeper: AppleMusicCacheRetrySleeper {
+    func sleep(for duration: Duration) async throws {
+        try await ContinuousClock().sleep(for: duration)
+    }
+}
+
 /// 讀取 Music.app 已經下載到本機的 Apple Music 歌詞快取。
 ///
 /// 這個 provider 不會發出網路請求，也不會讀取 Apple 帳號憑證。Apple Music
@@ -8,6 +18,8 @@ public struct AppleMusicCacheLyricsProvider: LyricsProvider, @unchecked Sendable
     private let fileManager: FileManager
     private let cacheRoot: URL
     private let maximumCandidates: Int
+    private let retryDelays: [Duration]
+    private let retrySleeper: any AppleMusicCacheRetrySleeper
 
     public init(
         cacheRoot: URL? = nil,
@@ -18,16 +30,34 @@ public struct AppleMusicCacheLyricsProvider: LyricsProvider, @unchecked Sendable
         self.cacheRoot = cacheRoot ?? fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Caches/com.apple.Music", isDirectory: true)
         self.maximumCandidates = maximumCandidates
+        self.retryDelays = Array(repeating: .milliseconds(300), count: 4)
+        self.retrySleeper = ContinuousCacheRetrySleeper()
+    }
+
+    init(
+        cacheRoot: URL,
+        fileManager: FileManager = .default,
+        maximumCandidates: Int = 160,
+        retryDelays: [Duration],
+        retrySleeper: any AppleMusicCacheRetrySleeper
+    ) {
+        self.fileManager = fileManager
+        self.cacheRoot = cacheRoot
+        self.maximumCandidates = maximumCandidates
+        self.retryDelays = retryDelays
+        self.retrySleeper = retrySleeper
     }
 
     public func lyrics(for track: TrackMetadata) async throws -> Lyrics? {
-        for attempt in 0..<5 {
+        if let lyrics = lookup(track: track) {
+            return lyrics
+        }
+
+        for delay in retryDelays {
+            try await retrySleeper.sleep(for: delay)
             if let lyrics = lookup(track: track) {
                 return lyrics
             }
-
-            guard attempt < 4 else { break }
-            try await Task.sleep(for: .milliseconds(300))
         }
 
         return nil

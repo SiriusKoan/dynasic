@@ -11,6 +11,8 @@ public struct LyricsProviderChain: LyricsProvider, Sendable {
                 if let lyrics = try await provider.lyrics(for: track) {
                     return lyrics
                 }
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 continue
             }

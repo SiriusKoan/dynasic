@@ -39,7 +39,11 @@ func appleMusicCacheProviderReadsTimedTTML() async throws {
         to: cacheDirectory.appendingPathComponent("test-response")
     )
 
-    let provider = AppleMusicCacheLyricsProvider(cacheRoot: root)
+    let provider = AppleMusicCacheLyricsProvider(
+        cacheRoot: root,
+        retryDelays: [],
+        retrySleeper: ImmediateCacheRetrySleeper()
+    )
     let lyrics = try await provider.lyrics(for: TrackMetadata(
         title: "Test Song",
         artist: "Test Artist",
@@ -89,7 +93,11 @@ func appleMusicCacheProviderRejectsWrongTrack() async throws {
         to: cacheDirectory.appendingPathComponent("test-response")
     )
 
-    let provider = AppleMusicCacheLyricsProvider(cacheRoot: root)
+    let provider = AppleMusicCacheLyricsProvider(
+        cacheRoot: root,
+        retryDelays: [],
+        retrySleeper: ImmediateCacheRetrySleeper()
+    )
     let lyrics = try await provider.lyrics(for: TrackMetadata(
         title: "Test Song",
         artist: "Test Artist",
@@ -111,17 +119,6 @@ func appleMusicCacheProviderRetriesCacheWarmup() async throws {
     )
     defer { try? FileManager.default.removeItem(at: root) }
 
-    let provider = AppleMusicCacheLyricsProvider(cacheRoot: root)
-    let task = Task {
-        try await provider.lyrics(for: TrackMetadata(
-            title: "Warming Cache Song",
-            artist: "Test Artist",
-            album: "Test Album",
-            duration: 10
-        ))
-    }
-
-    try await Task.sleep(for: .milliseconds(350))
     let response = """
     {
       "data": [{
@@ -143,10 +140,33 @@ func appleMusicCacheProviderRetriesCacheWarmup() async throws {
       }]
     }
     """
-    try Data(response.utf8).write(
-        to: cacheDirectory.appendingPathComponent("warming-response")
+    let provider = AppleMusicCacheLyricsProvider(
+        cacheRoot: root,
+        retryDelays: [.zero],
+        retrySleeper: CacheWritingRetrySleeper(
+            data: Data(response.utf8),
+            destination: cacheDirectory.appendingPathComponent("warming-response")
+        )
     )
 
-    let lyrics = try await task.value
+    let lyrics = try await provider.lyrics(for: TrackMetadata(
+        title: "Warming Cache Song",
+        artist: "Test Artist",
+        album: "Test Album",
+        duration: 10
+    ))
     #expect(lyrics?.lines == [LyricLine(timestamp: 1, text: "Cache appeared")])
+}
+
+private struct ImmediateCacheRetrySleeper: AppleMusicCacheRetrySleeper {
+    func sleep(for duration: Duration) async throws {}
+}
+
+private struct CacheWritingRetrySleeper: AppleMusicCacheRetrySleeper {
+    let data: Data
+    let destination: URL
+
+    func sleep(for duration: Duration) async throws {
+        try data.write(to: destination)
+    }
 }

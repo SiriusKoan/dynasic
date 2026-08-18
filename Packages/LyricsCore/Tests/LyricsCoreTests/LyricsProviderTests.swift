@@ -288,6 +288,26 @@ func lrclibRejectsInvalidJSON() async throws {
 }
 
 @Test
+func providerChainPropagatesCancellationWithoutCallingFallback() async {
+    let recorder = ProviderCallRecorder()
+    let chain = LyricsProviderChain(providers: [
+        CancellationLyricsProvider(),
+        RecordingLyricsProvider(recorder: recorder)
+    ])
+
+    do {
+        _ = try await chain.lyrics(for: TrackMetadata(title: "Song", artist: "Artist"))
+        Issue.record("預期 provider chain 傳遞取消狀態")
+    } catch is CancellationError {
+        // 預期結果。
+    } catch {
+        Issue.record("非預期錯誤：\(error)")
+    }
+
+    #expect(await recorder.callCount == 0)
+}
+
+@Test
 func matcherNormalizesWhitespaceAndCaseWithoutRemovingVersionMarkers() {
     let track = TrackMetadata(title: "Song (Live)", artist: "The Artist", album: "Album", duration: 201.2)
     let candidate = TrackMetadata(title: " song   (LIVE) ", artist: "THE ARTIST", album: "Album", duration: 201.8)
@@ -332,4 +352,27 @@ private func queryValue(_ name: String, in request: URLRequest) -> String? {
         return nil
     }
     return components.queryItems?.first(where: { $0.name == name })?.value
+}
+
+private struct CancellationLyricsProvider: LyricsProvider {
+    func lyrics(for track: TrackMetadata) async throws -> Lyrics? {
+        throw CancellationError()
+    }
+}
+
+private struct RecordingLyricsProvider: LyricsProvider {
+    let recorder: ProviderCallRecorder
+
+    func lyrics(for track: TrackMetadata) async throws -> Lyrics? {
+        await recorder.recordCall()
+        return nil
+    }
+}
+
+private actor ProviderCallRecorder {
+    private(set) var callCount = 0
+
+    func recordCall() {
+        callCount += 1
+    }
 }

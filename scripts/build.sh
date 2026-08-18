@@ -6,7 +6,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 "$ROOT_DIR/scripts/build-core.sh"
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
-    echo "ERROR: xcodebuild is unavailable; install Xcode before building DynamicLyrics.app." >&2
+    echo "ERROR: xcodebuild is unavailable; install Xcode before building dynasic.app." >&2
     exit 2
 fi
 

@@ -81,9 +81,9 @@ public actor LyricsCache {
             return String(Int(duration.rounded()))
         } ?? "none"
         let material = [
-            normalized(track.artist),
-            normalized(track.title),
-            normalized(track.album ?? ""),
+            NormalizedText.value(track.artist),
+            NormalizedText.value(track.title),
+            NormalizedText.value(track.album ?? ""),
             duration
         ].joined(separator: "\u{1f}")
         let digest = SHA256.hash(data: Data(material.utf8))
@@ -98,14 +98,6 @@ public actor LyricsCache {
         return applicationSupport
             .appendingPathComponent("dynasic", isDirectory: true)
             .appendingPathComponent("Lyrics", isDirectory: true)
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value
-            .precomposedStringWithCanonicalMapping
-            .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-            .lowercased()
     }
 
     private struct CacheEntry: Codable, Sendable {

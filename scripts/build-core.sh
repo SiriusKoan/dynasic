@@ -19,5 +19,4 @@ swift build \
     --scratch-path "$SCRATCH_DIR" \
     --cache-path "$CACHE_DIR" \
     --config-path "$CONFIG_DIR" \
-    --security-path "$SECURITY_DIR" \
-    --triple arm64-apple-macosx26.5
+    --security-path "$SECURITY_DIR"

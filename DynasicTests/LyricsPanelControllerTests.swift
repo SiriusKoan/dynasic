@@ -48,8 +48,8 @@ final class LyricsPanelControllerTests: XCTestCase {
         let controller = try! XCTUnwrap(state.panelControllerForTesting)
         let panel = try! XCTUnwrap(controller.panelForTesting)
 
-        state.isClickThrough = true
-        state.isAlwaysOnTop = false
+        state.settings.isClickThrough = true
+        state.settings.isAlwaysOnTop = false
 
         XCTAssertTrue(panel.ignoresMouseEvents)
         XCTAssertFalse(panel.isFloatingPanel)

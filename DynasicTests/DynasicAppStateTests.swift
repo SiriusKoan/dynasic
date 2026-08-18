@@ -9,7 +9,7 @@ final class DynasicAppStateTests: XCTestCase {
         let state = DynasicAppState()
 
         XCTAssertFalse(state.isLyricsVisible)
-        XCTAssertEqual(state.lyricsOffset, 0)
+        XCTAssertEqual(state.settings.lyricsOffset, 0)
         XCTAssertEqual(state.trackTitle, "Nothing Playing")
     }
 
@@ -47,25 +47,25 @@ final class DynasicAppStateTests: XCTestCase {
         let defaults = UserDefaults(suiteName: "dynasic-settings-\(UUID().uuidString)")!
         let firstState = DynasicAppState(userDefaults: defaults)
 
-        firstState.lyricsOffset = 1.25
-        firstState.lyricsFontSize = 30
-        firstState.lyricsOpacity = 0.7
-        firstState.lyricsAlignment = .trailing
-        firstState.isClickThrough = true
-        firstState.isAlwaysOnTop = false
-        firstState.showsPreviousLine = false
-        firstState.showsNextLine = false
+        firstState.settings.lyricsOffset = 1.25
+        firstState.settings.lyricsFontSize = 30
+        firstState.settings.lyricsOpacity = 0.7
+        firstState.settings.lyricsAlignment = .trailing
+        firstState.settings.isClickThrough = true
+        firstState.settings.isAlwaysOnTop = false
+        firstState.settings.showsPreviousLine = false
+        firstState.settings.showsNextLine = false
 
         let secondState = DynasicAppState(userDefaults: defaults)
 
-        XCTAssertEqual(secondState.lyricsOffset, 1.25)
-        XCTAssertEqual(secondState.lyricsFontSize, 30)
-        XCTAssertEqual(secondState.lyricsOpacity, 0.7)
-        XCTAssertEqual(secondState.lyricsAlignment, .trailing)
-        XCTAssertTrue(secondState.isClickThrough)
-        XCTAssertFalse(secondState.isAlwaysOnTop)
-        XCTAssertFalse(secondState.showsPreviousLine)
-        XCTAssertFalse(secondState.showsNextLine)
+        XCTAssertEqual(secondState.settings.lyricsOffset, 1.25)
+        XCTAssertEqual(secondState.settings.lyricsFontSize, 30)
+        XCTAssertEqual(secondState.settings.lyricsOpacity, 0.7)
+        XCTAssertEqual(secondState.settings.lyricsAlignment, .trailing)
+        XCTAssertTrue(secondState.settings.isClickThrough)
+        XCTAssertFalse(secondState.settings.isAlwaysOnTop)
+        XCTAssertFalse(secondState.settings.showsPreviousLine)
+        XCTAssertFalse(secondState.settings.showsNextLine)
     }
 
     func testDiagnosticsTextContainsStableSections() {
@@ -106,6 +106,20 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(state.reportedPlaybackPosition, 4.5)
         XCTAssertEqual(state.viewState, .nothingPlaying)
     }
+
+    func testObservationErrorKeepsMusicUnavailableStateDuringDisplayRefresh() async {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-observation-error-\(UUID().uuidString)")!,
+            musicBackend: FailingObservationBackend()
+        )
+
+        await state.observeOnceForTesting()
+        await state.refreshViewStateForTesting()
+
+        XCTAssertEqual(state.musicBackendStatus, "unavailable")
+        XCTAssertEqual(state.viewState, .musicUnavailable)
+        XCTAssertNotNil(state.lastObservationError)
+    }
 }
 
 private struct StubObservationBackend: AppleMusicObservationBackend {
@@ -114,4 +128,14 @@ private struct StubObservationBackend: AppleMusicObservationBackend {
     func snapshot() async throws -> PlaybackSnapshot {
         snapshot
     }
+}
+
+private struct FailingObservationBackend: AppleMusicObservationBackend {
+    func snapshot() async throws -> PlaybackSnapshot {
+        throw ObservationTestError.unavailable
+    }
+}
+
+private enum ObservationTestError: Error {
+    case unavailable
 }

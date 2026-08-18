@@ -3,25 +3,6 @@ import Foundation
 import Combine
 import LyricsCore
 
-enum LyricsPanelAlignment: String, CaseIterable, Identifiable {
-    case leading
-    case center
-    case trailing
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .leading:
-            return "Leading"
-        case .center:
-            return "Center"
-        case .trailing:
-            return "Trailing"
-        }
-    }
-}
-
 @MainActor
 final class DynasicAppState: ObservableObject {
     @Published private(set) var viewState: LyricsViewState = .idle
@@ -33,42 +14,22 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var lastObservationLatency: TimeInterval?
     @Published private(set) var lastObservationError: String?
     @Published var isLyricsVisible = false
-    @Published var lyricsOffset: Double {
-        didSet { userDefaults.set(lyricsOffset, forKey: SettingKey.lyricsOffset) }
-    }
-    @Published var lyricsFontSize: Double {
-        didSet { userDefaults.set(lyricsFontSize, forKey: SettingKey.lyricsFontSize) }
-    }
-    @Published var lyricsOpacity: Double {
-        didSet { userDefaults.set(lyricsOpacity, forKey: SettingKey.lyricsOpacity) }
-    }
-    @Published var lyricsAlignment: LyricsPanelAlignment {
-        didSet { userDefaults.set(lyricsAlignment.rawValue, forKey: SettingKey.lyricsAlignment) }
-    }
-    @Published var isClickThrough: Bool {
+    @Published var settings: DynasicSettings {
         didSet {
-            userDefaults.set(isClickThrough, forKey: SettingKey.isClickThrough)
-            panelController?.setClickThrough(isClickThrough)
+            settingsStore.save(settings)
+            if settings.isClickThrough != oldValue.isClickThrough {
+                panelController?.setClickThrough(settings.isClickThrough)
+            }
+            if settings.isAlwaysOnTop != oldValue.isAlwaysOnTop {
+                panelController?.setAlwaysOnTop(settings.isAlwaysOnTop)
+            }
         }
-    }
-    @Published var isAlwaysOnTop: Bool {
-        didSet {
-            userDefaults.set(isAlwaysOnTop, forKey: SettingKey.isAlwaysOnTop)
-            panelController?.setAlwaysOnTop(isAlwaysOnTop)
-        }
-    }
-    @Published var showsPreviousLine: Bool {
-        didSet { userDefaults.set(showsPreviousLine, forKey: SettingKey.showsPreviousLine) }
-    }
-    @Published var showsNextLine: Bool {
-        didSet { userDefaults.set(showsNextLine, forKey: SettingKey.showsNextLine) }
     }
 
     let coordinator: LyricsCoordinator
-    private let userDefaults: UserDefaults
+    private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
-    private var observationTask: Task<Void, Never>?
-    private var displayTask: Task<Void, Never>?
+    private let updateScheduler = AppUpdateScheduler()
     private var panelController: LyricsPanelController?
     private var mainWindowController: MainWindowController?
 
@@ -80,31 +41,10 @@ final class DynasicAppState: ObservableObject {
         musicBackend: any AppleMusicObservationBackend = AppleMusicObservationService(),
         startImmediately: Bool = false
     ) {
-        self.userDefaults = userDefaults
         self.musicBackend = musicBackend
-        userDefaults.register(defaults: [
-            SettingKey.lyricsOffset: 0.0,
-            SettingKey.lyricsFontSize: 22.0,
-            SettingKey.lyricsOpacity: 1.0,
-            SettingKey.lyricsAlignment: LyricsPanelAlignment.center.rawValue,
-            SettingKey.isClickThrough: false,
-            SettingKey.isAlwaysOnTop: true,
-            SettingKey.showsPreviousLine: true,
-            SettingKey.showsNextLine: true
-        ])
-
-        _lyricsOffset = Published(initialValue: userDefaults.double(forKey: SettingKey.lyricsOffset))
-        _lyricsFontSize = Published(initialValue: userDefaults.double(forKey: SettingKey.lyricsFontSize))
-        _lyricsOpacity = Published(initialValue: userDefaults.double(forKey: SettingKey.lyricsOpacity))
-        _lyricsAlignment = Published(
-            initialValue: LyricsPanelAlignment(
-                rawValue: userDefaults.string(forKey: SettingKey.lyricsAlignment) ?? ""
-            ) ?? .center
-        )
-        _isClickThrough = Published(initialValue: userDefaults.bool(forKey: SettingKey.isClickThrough))
-        _isAlwaysOnTop = Published(initialValue: userDefaults.bool(forKey: SettingKey.isAlwaysOnTop))
-        _showsPreviousLine = Published(initialValue: userDefaults.bool(forKey: SettingKey.showsPreviousLine))
-        _showsNextLine = Published(initialValue: userDefaults.bool(forKey: SettingKey.showsNextLine))
+        let settingsStore = DynasicSettingsStore(userDefaults: userDefaults)
+        self.settingsStore = settingsStore
+        _settings = Published(initialValue: settingsStore.load())
         _estimatedPlaybackPosition = Published(initialValue: nil)
 
         let provider = LyricsProviderChain(providers: [
@@ -119,11 +59,6 @@ final class DynasicAppState: ObservableObject {
         if startImmediately {
             startObservation()
         }
-    }
-
-    deinit {
-        observationTask?.cancel()
-        displayTask?.cancel()
     }
 
     func showLyrics() {
@@ -147,47 +82,28 @@ final class DynasicAppState: ObservableObject {
     }
 
     func startObservation() {
-        guard observationTask == nil else { return }
-
+        guard !updateScheduler.isRunning else { return }
         musicBackendStatus = "polling"
-        let clock = ContinuousClock()
-        observationTask = Task { [weak self] in
-            var nextObservation = clock.now
-            while !Task.isCancelled {
-                do {
-                    try await clock.sleep(until: nextObservation)
-                } catch {
-                    break
-                }
-                await self?.observeOnce()
-                nextObservation += .milliseconds(300)
-            }
-        }
-        displayTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.refreshViewStateNow()
-                do {
-                    try await Task.sleep(for: .milliseconds(50))
-                } catch {
-                    break
-                }
-            }
-        }
+        updateScheduler.start(
+            observe: { [weak self] in await self?.observeOnce() },
+            refreshDisplay: { [weak self] in await self?.refreshViewStateNow() }
+        )
     }
 
     func stopObservation() {
-        observationTask?.cancel()
-        observationTask = nil
-        displayTask?.cancel()
-        displayTask = nil
+        updateScheduler.stop()
     }
 
     var isObservationRunning: Bool {
-        observationTask != nil
+        updateScheduler.isRunning
     }
 
     func observeOnceForTesting() async {
         await observeOnce()
+    }
+
+    func refreshViewStateForTesting() async {
+        await refreshViewStateNow()
     }
 
     func refreshViewState() {
@@ -197,6 +113,7 @@ final class DynasicAppState: ObservableObject {
     }
 
     private func refreshViewStateNow() async {
+        guard musicBackendStatus != "unavailable" else { return }
         let state = await coordinator.currentState()
         let position = await coordinator.currentPosition()
         viewState = state
@@ -293,14 +210,14 @@ final class DynasicAppState: ObservableObject {
         provider ID: not exposed
         line count: \(lineCount)
         currentIndex: \(currentIndex)
-        offset: \(lyricsOffset)s
-        fontSize: \(lyricsFontSize)
-        opacity: \(lyricsOpacity)
-        alignment: \(lyricsAlignment.rawValue)
-        clickThrough: \(isClickThrough)
-        alwaysOnTop: \(isAlwaysOnTop)
-        showPreviousLine: \(showsPreviousLine)
-        showNextLine: \(showsNextLine)
+        offset: \(settings.lyricsOffset)s
+        fontSize: \(settings.lyricsFontSize)
+        opacity: \(settings.lyricsOpacity)
+        alignment: \(settings.lyricsAlignment.rawValue)
+        clickThrough: \(settings.isClickThrough)
+        alwaysOnTop: \(settings.isAlwaysOnTop)
+        showPreviousLine: \(settings.showsPreviousLine)
+        showNextLine: \(settings.showsNextLine)
 
         Network
         -------
@@ -363,14 +280,4 @@ final class DynasicAppState: ObservableObject {
         #endif
     }
 
-    private enum SettingKey {
-        static let lyricsOffset = "dynasic.settings.lyricsOffset"
-        static let lyricsFontSize = "dynasic.settings.lyricsFontSize"
-        static let lyricsOpacity = "dynasic.settings.lyricsOpacity"
-        static let lyricsAlignment = "dynasic.settings.lyricsAlignment"
-        static let isClickThrough = "dynasic.settings.isClickThrough"
-        static let isAlwaysOnTop = "dynasic.settings.isAlwaysOnTop"
-        static let showsPreviousLine = "dynasic.settings.showsPreviousLine"
-        static let showsNextLine = "dynasic.settings.showsNextLine"
-    }
 }

@@ -20,6 +20,8 @@
 		A10000010000000000000011 /* AppleMusicObservationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000012 /* AppleMusicObservationServiceTests.swift */; };
 		A10000010000000000000013 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000013 /* MainWindowController.swift */; };
 		A10000010000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000014 /* Assets.xcassets */; };
+		A10000010000000000000015 /* DynasicSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000015 /* DynasicSettings.swift */; };
+		A10000010000000000000016 /* AppUpdateScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000016 /* AppUpdateScheduler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +37,8 @@
 		A10000110000000000000012 /* AppleMusicObservationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicObservationServiceTests.swift; sourceTree = "<group>"; };
 		A10000110000000000000013 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		A10000110000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A10000110000000000000015 /* DynasicSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicSettings.swift; sourceTree = "<group>"; };
+		A10000110000000000000016 /* AppUpdateScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateScheduler.swift; sourceTree = "<group>"; };
 		A10000110000000000000003 /* dynasic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dynasic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000110000000000000004 /* dynasicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = dynasicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -59,6 +63,8 @@
 			children = (
 				A10000110000000000000001 /* DynasicApp.swift */,
 				A10000110000000000000005 /* AppState.swift */,
+				A10000110000000000000015 /* DynasicSettings.swift */,
+				A10000110000000000000016 /* AppUpdateScheduler.swift */,
 				A10000110000000000000006 /* MenuBarView.swift */,
 				A10000110000000000000008 /* LyricsPanelView.swift */,
 				A10000110000000000000009 /* LyricsPanelController.swift */,
@@ -168,7 +174,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */, A10000010000000000000003 /* AppState.swift in Sources */, A10000010000000000000004 /* MenuBarView.swift in Sources */, A10000010000000000000007 /* LyricsPanelView.swift in Sources */, A10000010000000000000008 /* LyricsPanelController.swift in Sources */, A10000010000000000000010 /* AppleMusicObservationService.swift in Sources */, A10000010000000000000013 /* MainWindowController.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */, A10000010000000000000003 /* AppState.swift in Sources */, A10000010000000000000015 /* DynasicSettings.swift in Sources */, A10000010000000000000016 /* AppUpdateScheduler.swift in Sources */, A10000010000000000000004 /* MenuBarView.swift in Sources */, A10000010000000000000007 /* LyricsPanelView.swift in Sources */, A10000010000000000000008 /* LyricsPanelController.swift in Sources */, A10000010000000000000010 /* AppleMusicObservationService.swift in Sources */, A10000010000000000000013 /* MainWindowController.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		A10000210000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */, A10000010000000000000006 /* DynasicAppStateTests.swift in Sources */, A10000010000000000000009 /* LyricsPanelControllerTests.swift in Sources */, A10000010000000000000011 /* AppleMusicObservationServiceTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
