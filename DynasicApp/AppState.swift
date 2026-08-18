@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Combine
 import LyricsCore
@@ -24,6 +25,7 @@ enum LyricsPanelAlignment: String, CaseIterable, Identifiable {
 @MainActor
 final class DynasicAppState: ObservableObject {
     @Published private(set) var viewState: LyricsViewState = .idle
+    @Published private(set) var estimatedPlaybackPosition: TimeInterval?
     @Published var isLyricsVisible = false
     @Published var lyricsOffset: Double {
         didSet { userDefaults.set(lyricsOffset, forKey: SettingKey.lyricsOffset) }
@@ -87,6 +89,7 @@ final class DynasicAppState: ObservableObject {
         _isAlwaysOnTop = Published(initialValue: userDefaults.bool(forKey: SettingKey.isAlwaysOnTop))
         _showsPreviousLine = Published(initialValue: userDefaults.bool(forKey: SettingKey.showsPreviousLine))
         _showsNextLine = Published(initialValue: userDefaults.bool(forKey: SettingKey.showsNextLine))
+        _estimatedPlaybackPosition = Published(initialValue: nil)
 
         let provider = LRCLIBProvider(httpClient: URLSessionHTTPClient())
         coordinator = LyricsCoordinator(
@@ -111,7 +114,9 @@ final class DynasicAppState: ObservableObject {
     func refreshViewState() {
         Task { [weak self, coordinator] in
             let state = await coordinator.currentState()
+            let position = await coordinator.currentPosition()
             self?.viewState = state
+            self?.estimatedPlaybackPosition = position
         }
     }
 
@@ -138,19 +143,112 @@ final class DynasicAppState: ObservableObject {
     }
 
     var diagnosticsText: String {
-        """
+        let track = diagnosticTrack
+        let lyrics = diagnosticLyrics
+        let bundleInfo = Bundle.main.infoDictionary
+        let version = bundleInfo?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let build = bundleInfo?["CFBundleVersion"] as? String ?? "unknown"
+        let lineCount = lyrics.map { String($0.lineCount) } ?? "—"
+        let currentIndex = lyrics.flatMap { $0.currentIndex.map(String.init) } ?? "—"
+
+        return """
         Application
         -----------
         product: dynasic
-        state: \(String(describing: viewState))
-        lyricsVisible: \(isLyricsVisible)
-        lyricsOffset: \(lyricsOffset)s
-        lyricsFontSize: \(lyricsFontSize)
-        lyricsOpacity: \(lyricsOpacity)
-        lyricsAlignment: \(lyricsAlignment.rawValue)
+        version: \(version)
+        build: \(build)
+        macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+        architecture: \(Self.architecture)
+
+        Apple Music
+        -----------
+        backend: not connected
+        authorization: unknown
+        Music running: unknown
+        state: not connected
+
+        Track
+        -----
+        title: \(track?.title ?? "—")
+        artist: \(track?.artist ?? "—")
+        album: \(track?.album ?? "—")
+        duration: \(formatted(track?.duration))
+        identity: \(track.map { TrackIdentity(metadata: $0).description } ?? "—")
+
+        Playback
+        --------
+        reportedPosition: not exposed
+        estimatedPosition: \(formatted(estimatedPlaybackPosition))
+        drift: not exposed
+        lastSnapshotAge: not exposed
+
+        Lyrics
+        ------
+        provider: LRCLIB
+        cache hit: unknown
+        provider ID: not exposed
+        line count: \(lineCount)
+        currentIndex: \(currentIndex)
+        offset: \(lyricsOffset)s
+        fontSize: \(lyricsFontSize)
+        opacity: \(lyricsOpacity)
+        alignment: \(lyricsAlignment.rawValue)
         clickThrough: \(isClickThrough)
         alwaysOnTop: \(isAlwaysOnTop)
+        showPreviousLine: \(showsPreviousLine)
+        showNextLine: \(showsNextLine)
+
+        Network
+        -------
+        last request: not exposed
+        status: not exposed
+        latency: not exposed
+
+        Errors
+        ------
+        last error: \(diagnosticError)
         """
+    }
+
+    func copyDiagnostics() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(diagnosticsText, forType: .string)
+    }
+
+    private var diagnosticTrack: TrackMetadata? {
+        switch viewState {
+        case let .loading(track), let .displaying(track, _, _), let .noLyrics(track):
+            return track
+        case .idle, .musicUnavailable, .nothingPlaying, .error:
+            return nil
+        }
+    }
+
+    private var diagnosticLyrics: (lineCount: Int, currentIndex: Int?)? {
+        guard case let .displaying(_, lyrics, currentIndex) = viewState else {
+            return nil
+        }
+        return (lyrics.lines.count, currentIndex)
+    }
+
+    private var diagnosticError: String {
+        guard case let .error(error) = viewState else { return "None" }
+        return String(describing: error)
+    }
+
+    private func formatted(_ value: TimeInterval?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%.2f s", value)
+    }
+
+    private static var architecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
     }
 
     private enum SettingKey {

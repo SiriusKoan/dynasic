@@ -46,4 +46,21 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertFalse(secondState.showsPreviousLine)
         XCTAssertFalse(secondState.showsNextLine)
     }
+
+    func testDiagnosticsTextContainsStableSections() {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-diagnostics-\(UUID().uuidString)")!
+        )
+
+        let text = state.diagnosticsText
+
+        XCTAssertTrue(text.contains("Application"))
+        XCTAssertTrue(text.contains("Apple Music"))
+        XCTAssertTrue(text.contains("Playback"))
+        XCTAssertTrue(text.contains("Lyrics"))
+        XCTAssertTrue(text.contains("Network"))
+        XCTAssertTrue(text.contains("Errors"))
+        XCTAssertTrue(text.contains("backend: not connected"))
+        XCTAssertTrue(text.contains("provider: LRCLIB"))
+    }
 }

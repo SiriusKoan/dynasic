@@ -95,12 +95,24 @@ struct DiagnosticsView: View {
     @ObservedObject var state: DynasicAppState
 
     var body: some View {
-        ScrollView {
-            Text(state.diagnosticsText)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
+        VStack(spacing: 0) {
+            ScrollView {
+                Text(state.diagnosticsText)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Copy Diagnostics") {
+                    state.copyDiagnostics()
+                }
+            }
+            .padding(10)
         }
         .frame(width: 480, height: 320)
     }
