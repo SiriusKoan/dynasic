@@ -63,15 +63,14 @@ public struct LRCLIBProvider: LyricsProvider, Sendable {
     }
 
     private func fetchSearch(track: TrackMetadata) async throws -> [LRCLIBRecord] {
-        var queryItems = [
-            URLQueryItem(name: "track_name", value: track.title),
-            URLQueryItem(name: "artist_name", value: track.artist)
-        ]
-        if let album = nonEmpty(track.album) {
-            queryItems.append(URLQueryItem(name: "album_name", value: album))
-        }
-
-        let request = try makeRequest(path: "api/search", queryItems: queryItems)
+        let searchQuery = [track.title, track.artist]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let request = try makeRequest(
+            path: "api/search",
+            queryItems: [URLQueryItem(name: "q", value: searchQuery)]
+        )
         let (data, response) = try await httpClient.data(for: request)
         try validate(response)
         return try decode([LRCLIBRecord].self, from: data)

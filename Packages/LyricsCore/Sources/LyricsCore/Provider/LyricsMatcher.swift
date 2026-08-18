@@ -12,7 +12,7 @@ public struct LyricsMatch: Sendable, Equatable {
 
 public enum LyricsMatcher {
     public static func score(track: TrackMetadata, candidate: TrackMetadata) -> Int? {
-        guard normalized(track.title) == normalized(candidate.title),
+        guard titlesMatch(track.title, candidate.title),
               normalized(track.artist) == normalized(candidate.artist) else {
             return nil
         }
@@ -72,5 +72,16 @@ public enum LyricsMatcher {
         guard let value else { return nil }
         let normalized = normalized(value)
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func titlesMatch(_ lhs: String, _ rhs: String) -> Bool {
+        let left = normalized(lhs)
+        let right = normalized(rhs)
+        guard !left.isEmpty, !right.isEmpty else { return false }
+        if left == right { return true }
+
+        let leftParts = left.components(separatedBy: " - ")
+        let rightParts = right.components(separatedBy: " - ")
+        return leftParts.contains(right) || rightParts.contains(left)
     }
 }

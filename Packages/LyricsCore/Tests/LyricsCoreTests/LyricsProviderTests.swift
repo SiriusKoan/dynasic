@@ -55,6 +55,10 @@ func lrclibExactRequestContainsSignatureAndUserAgent() async throws {
     #expect(queryValue("duration", in: client.requests[0]) == "201.2")
     #expect(client.requests[0].value(forHTTPHeaderField: "User-Agent") == "dynasic-test/1.0")
     #expect(client.requests[1].url?.path == "/api/search")
+    #expect(queryValue("q", in: client.requests[1]) == "Song & Story Artist")
+    #expect(queryValue("track_name", in: client.requests[1]) == nil)
+    #expect(queryValue("artist_name", in: client.requests[1]) == nil)
+    #expect(queryValue("album_name", in: client.requests[1]) == nil)
 }
 
 @Test
@@ -132,6 +136,77 @@ func lrclibSearchFallbackChoosesBestMatchingSyncedRecord() async throws {
     ))
 
     #expect(lyrics?.lines.map(\.text) == ["best"])
+}
+
+@Test
+func lrclibSearchFallbackFindsFuyubiyoriWhenAlbumMetadataDiffers() async throws {
+    let searchJSON = """
+    [
+      {
+        "id": 12253623,
+        "trackName": "Fuyubiyori",
+        "artistName": "Eri Sasaki",
+        "albumName": "Fuyubiyori",
+        "duration": 277.0,
+        "instrumental": false,
+        "plainLyrics": "冬が来るたび思い出す",
+        "syncedLyrics": "[00:01.00]冬が来るたび思い出す"
+      }
+    ]
+    """
+    let client = MockHTTPClient(responses: [
+        .init(data: Data("{}".utf8), response: httpResponse(statusCode: 404)),
+        .init(data: Data(searchJSON.utf8), response: httpResponse(statusCode: 200))
+    ])
+    let provider = LRCLIBProvider(
+        httpClient: client,
+        baseURL: URL(string: "https://example.com")!
+    )
+
+    let lyrics = try await provider.lyrics(for: TrackMetadata(
+        title: "Fuyubiyori",
+        artist: "Eri Sasaki",
+        album: "Fuyubiyori (TV Anime Ending Theme) - EP",
+        duration: 277
+    ))
+
+    #expect(lyrics?.lines.map(\.text) == ["冬が来るたび思い出す"])
+    #expect(queryValue("q", in: client.requests[1]) == "Fuyubiyori Eri Sasaki")
+}
+
+@Test
+func lrclibSearchFallbackFindsBloomingWithYouWhenResultUsesJapaneseTitle() async throws {
+    let searchJSON = """
+    [
+      {
+        "id": 33851710,
+        "trackName": "芽吹くとき - Blooming With you",
+        "artistName": "yonige",
+        "albumName": "Blooming With you",
+        "duration": 219.0,
+        "instrumental": false,
+        "plainLyrics": "芽吹くとき",
+        "syncedLyrics": "[00:01.00]芽吹くとき"
+      }
+    ]
+    """
+    let client = MockHTTPClient(responses: [
+        .init(data: Data("{}".utf8), response: httpResponse(statusCode: 404)),
+        .init(data: Data(searchJSON.utf8), response: httpResponse(statusCode: 200))
+    ])
+    let provider = LRCLIBProvider(
+        httpClient: client,
+        baseURL: URL(string: "https://example.com")!
+    )
+
+    let lyrics = try await provider.lyrics(for: TrackMetadata(
+        title: "Blooming With you",
+        artist: "yonige",
+        album: "Blooming With you - Single",
+        duration: 219.2
+    ))
+
+    #expect(lyrics?.lines.map(\.text) == ["芽吹くとき"])
 }
 
 @Test
@@ -220,6 +295,18 @@ func matcherNormalizesWhitespaceAndCaseWithoutRemovingVersionMarkers() {
 
     #expect(LyricsMatcher.score(track: track, candidate: candidate) == 260)
     #expect(LyricsMatcher.score(track: track, candidate: regular) == nil)
+}
+
+@Test
+func matcherAcceptsTranslatedTitleAfterDash() {
+    let track = TrackMetadata(title: "Blooming With you", artist: "yonige", duration: 219.2)
+    let candidate = TrackMetadata(
+        title: "芽吹くとき - Blooming With you",
+        artist: "yonige",
+        duration: 219
+    )
+
+    #expect(LyricsMatcher.score(track: track, candidate: candidate) == 240)
 }
 
 @Test
