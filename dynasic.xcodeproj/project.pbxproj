@@ -9,17 +9,24 @@
 /* Begin PBXBuildFile section */
 		A10000010000000000000001 /* DynasicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000001 /* DynasicApp.swift */; };
 		A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000002 /* DynasicSmokeTests.swift */; };
+		A10000010000000000000003 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000005 /* AppState.swift */; };
+		A10000010000000000000004 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000006 /* MenuBarView.swift */; };
+		A10000010000000000000005 /* LyricsCore in Frameworks */ = {isa = PBXBuildFile; productRef = A10000910000000000000002 /* LyricsCore */; };
+		A10000010000000000000006 /* DynasicAppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000007 /* DynasicAppStateTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A10000110000000000000001 /* DynasicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicApp.swift; sourceTree = "<group>"; };
 		A10000110000000000000002 /* DynasicSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicSmokeTests.swift; sourceTree = "<group>"; };
+		A10000110000000000000005 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		A10000110000000000000006 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		A10000110000000000000007 /* DynasicAppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicAppStateTests.swift; sourceTree = "<group>"; };
 		A10000110000000000000003 /* dynasic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dynasic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000110000000000000004 /* dynasicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = dynasicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A10000210000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000005 /* LyricsCore in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		A10000210000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
@@ -37,6 +44,8 @@
 			isa = PBXGroup;
 			children = (
 				A10000110000000000000001 /* DynasicApp.swift */,
+				A10000110000000000000005 /* AppState.swift */,
+				A10000110000000000000006 /* MenuBarView.swift */,
 			);
 			path = DynasicApp;
 			sourceTree = "<group>";
@@ -45,6 +54,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000110000000000000002 /* DynasicSmokeTests.swift */,
+				A10000110000000000000007 /* DynasicAppStateTests.swift */,
 			);
 			path = DynasicTests;
 			sourceTree = "<group>";
@@ -71,6 +81,9 @@
 			);
 			buildRules = ();
 			dependencies = ();
+			packageProductDependencies = (
+				A10000910000000000000002 /* LyricsCore */,
+			);
 			name = dynasic;
 			productName = dynasic;
 			productReference = A10000110000000000000003 /* dynasic.app */;
@@ -116,6 +129,9 @@
 			);
 			mainGroup = A10000310000000000000001;
 			productRefGroup = A10000310000000000000004 /* Products */;
+			packageReferences = (
+				A10000910000000000000001 /* XCLocalSwiftPackageReference "Packages/LyricsCore" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -131,8 +147,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
-		A10000210000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */, A10000010000000000000003 /* AppState.swift in Sources */, A10000010000000000000004 /* MenuBarView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */, A10000010000000000000006 /* DynasicAppStateTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -142,6 +158,21 @@
 /* Begin PBXContainerItemProxy section */
 		A10000710000000000000002 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = A10000510000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A10000410000000000000001; remoteInfo = dynasic; };
 /* End PBXContainerItemProxy section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A10000910000000000000001 /* XCLocalSwiftPackageReference "Packages/LyricsCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LyricsCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000910000000000000002 /* LyricsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000910000000000000001 /* XCLocalSwiftPackageReference "Packages/LyricsCore" */;
+			productName = LyricsCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A10000810000000000000001 /* Debug */ = {
@@ -169,7 +200,9 @@
 		A10000810000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				CODE_SIGNING_ALLOWED = NO;
+				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
 				INFOPLIST_KEY_CFBundleName = dynasic;
@@ -179,6 +212,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasic;
 				PRODUCT_NAME = dynasic;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -186,6 +220,7 @@
 		A10000810000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				CODE_SIGNING_ALLOWED = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
@@ -203,6 +238,7 @@
 		A10000810000000000000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -217,6 +253,7 @@
 		A10000810000000000000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				GENERATE_INFOPLIST_FILE = YES;

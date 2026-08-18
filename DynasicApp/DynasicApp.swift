@@ -1,18 +1,22 @@
-import AppKit
 import SwiftUI
+
+import AppKit
 
 @main
 struct DynasicApp: App {
+    @StateObject private var appState = DynasicAppState()
+
     var body: some Scene {
         MenuBarExtra("dynasic", systemImage: "music.note") {
-            Text("dynasic")
-                .font(.headline)
+            MenuBarView(state: appState)
+        }
 
-            Divider()
+        Window("Settings", id: "settings") {
+            SettingsView(state: appState)
+        }
 
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
-            }
+        Window("Diagnostics", id: "diagnostics") {
+            DiagnosticsView(state: appState)
         }
     }
 }
