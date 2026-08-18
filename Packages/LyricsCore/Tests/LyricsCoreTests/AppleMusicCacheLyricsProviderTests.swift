@@ -99,3 +99,54 @@ func appleMusicCacheProviderRejectsWrongTrack() async throws {
 
     #expect(lyrics == nil)
 }
+
+@Test
+func appleMusicCacheProviderRetriesCacheWarmup() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("dynasic-apple-music-cache-\(UUID().uuidString)")
+    let cacheDirectory = root.appendingPathComponent("fsCachedData", isDirectory: true)
+    try FileManager.default.createDirectory(
+        at: cacheDirectory,
+        withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let provider = AppleMusicCacheLyricsProvider(cacheRoot: root)
+    let task = Task {
+        try await provider.lyrics(for: TrackMetadata(
+            title: "Warming Cache Song",
+            artist: "Test Artist",
+            album: "Test Album",
+            duration: 10
+        ))
+    }
+
+    try await Task.sleep(for: .milliseconds(350))
+    let response = """
+    {
+      "data": [{
+        "attributes": {
+          "name": "Warming Cache Song",
+          "artistName": "Test Artist",
+          "albumName": "Test Album",
+          "durationInMillis": 10000
+        },
+        "relationships": {
+          "syllable-lyrics": {
+            "data": [{
+              "attributes": {
+                "ttmlLocalizations": "<tt xmlns=\\"http://www.w3.org/ns/ttml\\"><body><p begin=\\"1s\\">Cache appeared</p></body></tt>"
+              }
+            }]
+          }
+        }
+      }]
+    }
+    """
+    try Data(response.utf8).write(
+        to: cacheDirectory.appendingPathComponent("warming-response")
+    )
+
+    let lyrics = try await task.value
+    #expect(lyrics?.lines == [LyricLine(timestamp: 1, text: "Cache appeared")])
+}

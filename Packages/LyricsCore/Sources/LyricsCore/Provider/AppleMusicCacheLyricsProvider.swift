@@ -21,7 +21,16 @@ public struct AppleMusicCacheLyricsProvider: LyricsProvider, @unchecked Sendable
     }
 
     public func lyrics(for track: TrackMetadata) async throws -> Lyrics? {
-        lookup(track: track)
+        for attempt in 0..<5 {
+            if let lyrics = lookup(track: track) {
+                return lyrics
+            }
+
+            guard attempt < 4 else { break }
+            try await Task.sleep(for: .milliseconds(300))
+        }
+
+        return nil
     }
 
     private func lookup(track: TrackMetadata) -> Lyrics? {
