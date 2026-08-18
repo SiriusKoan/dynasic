@@ -8,6 +8,7 @@ final class DynasicAppState: ObservableObject {
     @Published var lyricsOffset = 0.0
 
     let coordinator: LyricsCoordinator
+    private var panelController: LyricsPanelController?
 
     init() {
         let provider = LRCLIBProvider(httpClient: URLSessionHTTPClient())
@@ -19,10 +20,15 @@ final class DynasicAppState: ObservableObject {
 
     func showLyrics() {
         isLyricsVisible = true
+        if panelController == nil {
+            panelController = LyricsPanelController(state: self)
+        }
+        panelController?.show()
     }
 
     func hideLyrics() {
         isLyricsVisible = false
+        panelController?.hide()
     }
 
     func refreshViewState() {
