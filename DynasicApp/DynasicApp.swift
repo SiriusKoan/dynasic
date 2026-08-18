@@ -6,7 +6,9 @@ struct DynasicApp: App {
     @StateObject private var appState: DynasicAppState
 
     init() {
-        _appState = StateObject(wrappedValue: DynasicAppState(startImmediately: true))
+        let state = DynasicAppState(startImmediately: true)
+        _appState = StateObject(wrappedValue: state)
+        state.showMainWindow()
     }
 
     var body: some Scene {

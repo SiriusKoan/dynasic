@@ -68,8 +68,10 @@ final class DynasicAppState: ObservableObject {
     private let musicBackend: any AppleMusicObservationBackend
     private var observationTask: Task<Void, Never>?
     private var panelController: LyricsPanelController?
+    private var mainWindowController: MainWindowController?
 
     var panelControllerForTesting: LyricsPanelController? { panelController }
+    var mainWindowControllerForTesting: MainWindowController? { mainWindowController }
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -129,6 +131,13 @@ final class DynasicAppState: ObservableObject {
     func hideLyrics() {
         isLyricsVisible = false
         panelController?.hide()
+    }
+
+    func showMainWindow() {
+        if mainWindowController == nil {
+            mainWindowController = MainWindowController(state: self)
+        }
+        mainWindowController?.show()
     }
 
     func startObservation() {

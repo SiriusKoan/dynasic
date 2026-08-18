@@ -17,6 +17,10 @@ struct MenuBarView: View {
 
             Divider()
 
+            Button("Open dynasic") {
+                state.showMainWindow()
+            }
+
             Button(state.isLyricsVisible ? "Hide Lyrics" : "Show Lyrics") {
                 if state.isLyricsVisible {
                     state.hideLyrics()

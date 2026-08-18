@@ -23,6 +23,25 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertFalse(state.isLyricsVisible)
     }
 
+    func testMainWindowUsesDynasicTitleAndCanBeShownAgain() throws {
+        let state = DynasicAppState()
+
+        state.showMainWindow()
+        let controller = try XCTUnwrap(state.mainWindowControllerForTesting)
+        let firstWindow = try XCTUnwrap(controller.window)
+
+        XCTAssertEqual(firstWindow.title, "dynasic")
+        XCTAssertTrue(firstWindow.styleMask.contains(.titled))
+        XCTAssertTrue(controller.isVisible)
+
+        controller.hide()
+        state.showMainWindow()
+
+        XCTAssertTrue(firstWindow === controller.window)
+        XCTAssertTrue(controller.isVisible)
+        controller.hide()
+    }
+
     func testSettingsPersistAcrossStateInstances() {
         let defaults = UserDefaults(suiteName: "dynasic-settings-\(UUID().uuidString)")!
         let firstState = DynasicAppState(userDefaults: defaults)
