@@ -26,6 +26,11 @@ enum LyricsPanelAlignment: String, CaseIterable, Identifiable {
 final class DynasicAppState: ObservableObject {
     @Published private(set) var viewState: LyricsViewState = .idle
     @Published private(set) var estimatedPlaybackPosition: TimeInterval?
+    @Published private(set) var musicBackendStatus = "not started"
+    @Published private(set) var reportedPlaybackState: PlaybackState?
+    @Published private(set) var reportedPlaybackPosition: TimeInterval?
+    @Published private(set) var lastSnapshotAt: Date?
+    @Published private(set) var lastObservationError: String?
     @Published var isLyricsVisible = false
     @Published var lyricsOffset: Double {
         didSet { userDefaults.set(lyricsOffset, forKey: SettingKey.lyricsOffset) }
@@ -60,12 +65,19 @@ final class DynasicAppState: ObservableObject {
 
     let coordinator: LyricsCoordinator
     private let userDefaults: UserDefaults
+    private let musicBackend: any AppleMusicObservationBackend
+    private var observationTask: Task<Void, Never>?
     private var panelController: LyricsPanelController?
 
     var panelControllerForTesting: LyricsPanelController? { panelController }
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        musicBackend: any AppleMusicObservationBackend = AppleMusicObservationService(),
+        startImmediately: Bool = false
+    ) {
         self.userDefaults = userDefaults
+        self.musicBackend = musicBackend
         userDefaults.register(defaults: [
             SettingKey.lyricsOffset: 0.0,
             SettingKey.lyricsFontSize: 22.0,
@@ -96,6 +108,14 @@ final class DynasicAppState: ObservableObject {
             provider: provider,
             cache: LyricsCache()
         )
+
+        if startImmediately {
+            startObservation()
+        }
+    }
+
+    deinit {
+        observationTask?.cancel()
     }
 
     func showLyrics() {
@@ -111,12 +131,61 @@ final class DynasicAppState: ObservableObject {
         panelController?.hide()
     }
 
+    func startObservation() {
+        guard observationTask == nil else { return }
+
+        musicBackendStatus = "polling"
+        observationTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.observeOnce()
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    break
+                }
+            }
+        }
+    }
+
+    func stopObservation() {
+        observationTask?.cancel()
+        observationTask = nil
+    }
+
+    var isObservationRunning: Bool {
+        observationTask != nil
+    }
+
+    func observeOnceForTesting() async {
+        await observeOnce()
+    }
+
     func refreshViewState() {
         Task { [weak self, coordinator] in
             let state = await coordinator.currentState()
             let position = await coordinator.currentPosition()
             self?.viewState = state
             self?.estimatedPlaybackPosition = position
+        }
+    }
+
+    private func observeOnce() async {
+        do {
+            let snapshot = try await musicBackend.snapshot()
+            reportedPlaybackState = snapshot.state
+            reportedPlaybackPosition = snapshot.position
+            lastSnapshotAt = Date()
+            lastObservationError = nil
+            musicBackendStatus = "connected"
+
+            await coordinator.process(snapshot: snapshot)
+            viewState = await coordinator.currentState()
+            estimatedPlaybackPosition = await coordinator.currentPosition()
+        } catch {
+            musicBackendStatus = "unavailable"
+            lastObservationError = String(describing: error)
+            viewState = .musicUnavailable
+            estimatedPlaybackPosition = nil
         }
     }
 
@@ -162,10 +231,10 @@ final class DynasicAppState: ObservableObject {
 
         Apple Music
         -----------
-        backend: not connected
-        authorization: unknown
-        Music running: unknown
-        state: not connected
+        backend: Apple Events
+        authorization: usage description declared; TCC state not exposed
+        Music running: \(musicBackendStatus)
+        state: \(reportedPlaybackState.map(String.init(describing:)) ?? "—")
 
         Track
         -----
@@ -177,10 +246,10 @@ final class DynasicAppState: ObservableObject {
 
         Playback
         --------
-        reportedPosition: not exposed
+        reportedPosition: \(formatted(reportedPlaybackPosition))
         estimatedPosition: \(formatted(estimatedPlaybackPosition))
         drift: not exposed
-        lastSnapshotAge: not exposed
+        lastSnapshotAge: \(lastSnapshotAge)
 
         Lyrics
         ------
@@ -232,8 +301,16 @@ final class DynasicAppState: ObservableObject {
     }
 
     private var diagnosticError: String {
+        if let lastObservationError {
+            return lastObservationError
+        }
         guard case let .error(error) = viewState else { return "None" }
         return String(describing: error)
+    }
+
+    private var lastSnapshotAge: String {
+        guard let lastSnapshotAt else { return "—" }
+        return String(format: "%.1f s", max(0, Date().timeIntervalSince(lastSnapshotAt)))
     }
 
     private func formatted(_ value: TimeInterval?) -> String {

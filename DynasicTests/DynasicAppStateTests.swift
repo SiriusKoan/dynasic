@@ -1,4 +1,5 @@
 import XCTest
+import LyricsCore
 
 @testable import dynasic
 
@@ -60,7 +61,37 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertTrue(text.contains("Lyrics"))
         XCTAssertTrue(text.contains("Network"))
         XCTAssertTrue(text.contains("Errors"))
-        XCTAssertTrue(text.contains("backend: not connected"))
+        XCTAssertTrue(text.contains("backend: Apple Events"))
         XCTAssertTrue(text.contains("provider: LRCLIB"))
+    }
+
+    func testObservationUpdatesCoordinatorWithoutStartingPollingLoop() async {
+        let snapshot = PlaybackSnapshot(
+            track: nil,
+            state: .paused,
+            position: 4.5,
+            observedAt: ContinuousClock().now
+        )
+        let backend = StubObservationBackend(snapshot: snapshot)
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-observation-\(UUID().uuidString)")!,
+            musicBackend: backend
+        )
+
+        await state.observeOnceForTesting()
+
+        XCTAssertFalse(state.isObservationRunning)
+        XCTAssertEqual(state.musicBackendStatus, "connected")
+        XCTAssertEqual(state.reportedPlaybackState, .paused)
+        XCTAssertEqual(state.reportedPlaybackPosition, 4.5)
+        XCTAssertEqual(state.viewState, .nothingPlaying)
+    }
+}
+
+private struct StubObservationBackend: AppleMusicObservationBackend {
+    let snapshot: PlaybackSnapshot
+
+    func snapshot() async throws -> PlaybackSnapshot {
+        snapshot
     }
 }
