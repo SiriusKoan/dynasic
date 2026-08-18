@@ -82,7 +82,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertTrue(text.contains("Network"))
         XCTAssertTrue(text.contains("Errors"))
         XCTAssertTrue(text.contains("backend: Apple Events"))
-        XCTAssertTrue(text.contains("provider: LRCLIB"))
+        XCTAssertTrue(text.contains("provider: Apple Music cache → LRCLIB"))
     }
 
     func testObservationUpdatesCoordinatorWithoutStartingPollingLoop() async {

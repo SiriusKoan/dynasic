@@ -105,7 +105,10 @@ final class DynasicAppState: ObservableObject {
         _showsNextLine = Published(initialValue: userDefaults.bool(forKey: SettingKey.showsNextLine))
         _estimatedPlaybackPosition = Published(initialValue: nil)
 
-        let provider = LRCLIBProvider(httpClient: URLSessionHTTPClient())
+        let provider = LyricsProviderChain(providers: [
+            AppleMusicCacheLyricsProvider(),
+            LRCLIBProvider(httpClient: URLSessionHTTPClient())
+        ])
         coordinator = LyricsCoordinator(
             provider: provider,
             cache: LyricsCache()
@@ -262,7 +265,7 @@ final class DynasicAppState: ObservableObject {
 
         Lyrics
         ------
-        provider: LRCLIB
+        provider: Apple Music cache → LRCLIB
         cache hit: unknown
         provider ID: not exposed
         line count: \(lineCount)
