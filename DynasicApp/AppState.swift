@@ -134,7 +134,7 @@ final class DynasicAppState: ObservableObject {
     }
 
     func showMainWindow() {
-        if mainWindowController == nil {
+        if mainWindowController?.window == nil {
             mainWindowController = MainWindowController(state: self)
         }
         mainWindowController?.show()
@@ -148,7 +148,7 @@ final class DynasicAppState: ObservableObject {
             while !Task.isCancelled {
                 await self?.observeOnce()
                 do {
-                    try await Task.sleep(for: .seconds(1))
+                    try await Task.sleep(for: .milliseconds(300))
                 } catch {
                     break
                 }

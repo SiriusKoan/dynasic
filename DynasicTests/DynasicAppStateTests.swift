@@ -34,7 +34,8 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertTrue(firstWindow.styleMask.contains(.titled))
         XCTAssertTrue(controller.isVisible)
 
-        controller.hide()
+        firstWindow.performClose(nil)
+        XCTAssertFalse(controller.isVisible)
         state.showMainWindow()
 
         XCTAssertTrue(firstWindow === controller.window)

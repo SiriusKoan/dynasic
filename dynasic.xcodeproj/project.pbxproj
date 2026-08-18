@@ -224,7 +224,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
 				INFOPLIST_KEY_CFBundleName = dynasic;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "dynasic reads Apple Music playback information to synchronize lyrics.";
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -243,7 +243,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
 				INFOPLIST_KEY_CFBundleName = dynasic;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "dynasic reads Apple Music playback information to synchronize lyrics.";
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
