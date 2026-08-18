@@ -1,4 +1,4 @@
-public struct LyricsMetadata: Sendable, Equatable, Hashable {
+public struct LyricsMetadata: Sendable, Equatable, Hashable, Codable {
     public let artist: String?
     public let album: String?
     public let title: String?
@@ -17,7 +17,7 @@ public struct LyricsMetadata: Sendable, Equatable, Hashable {
     }
 }
 
-public struct Lyrics: Sendable, Equatable {
+public struct Lyrics: Sendable, Equatable, Codable {
     public let lines: [LyricLine]
     public let metadata: LyricsMetadata
 

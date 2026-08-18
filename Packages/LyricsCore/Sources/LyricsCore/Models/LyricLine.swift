@@ -1,6 +1,6 @@
 import Foundation
 
-public struct LyricLine: Sendable, Equatable, Hashable {
+public struct LyricLine: Sendable, Equatable, Hashable, Codable {
     public let timestamp: TimeInterval
     public let text: String
 
