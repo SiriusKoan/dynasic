@@ -1,0 +1,240 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000010000000000000001 /* DynasicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000001 /* DynasicApp.swift */; };
+		A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000002 /* DynasicSmokeTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000110000000000000001 /* DynasicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicApp.swift; sourceTree = "<group>"; };
+		A10000110000000000000002 /* DynasicSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicSmokeTests.swift; sourceTree = "<group>"; };
+		A10000110000000000000003 /* dynasic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dynasic.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000110000000000000004 /* dynasicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = dynasicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000210000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000310000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A10000310000000000000002 /* DynasicApp */,
+				A10000310000000000000003 /* DynasicTests */,
+				A10000310000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000310000000000000002 /* DynasicApp */ = {
+			isa = PBXGroup;
+			children = (
+				A10000110000000000000001 /* DynasicApp.swift */,
+			);
+			path = DynasicApp;
+			sourceTree = "<group>";
+		};
+		A10000310000000000000003 /* DynasicTests */ = {
+			isa = PBXGroup;
+			children = (
+				A10000110000000000000002 /* DynasicSmokeTests.swift */,
+			);
+			path = DynasicTests;
+			sourceTree = "<group>";
+		};
+		A10000310000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000110000000000000003 /* dynasic.app */,
+				A10000110000000000000004 /* dynasicTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000410000000000000001 /* dynasic */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000610000000000000002 /* Build configuration list for PBXNativeTarget "dynasic" */;
+			buildPhases = (
+				A10000210000000000000003 /* Sources */,
+				A10000210000000000000001 /* Frameworks */,
+				A10000210000000000000005 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = dynasic;
+			productName = dynasic;
+			productReference = A10000110000000000000003 /* dynasic.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A10000410000000000000002 /* dynasicTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000610000000000000003 /* Build configuration list for PBXNativeTarget "dynasicTests" */;
+			buildPhases = (
+				A10000210000000000000004 /* Sources */,
+				A10000210000000000000002 /* Frameworks */,
+				A10000210000000000000006 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = (
+				A10000710000000000000001 /* PBXTargetDependency */,
+			);
+			name = dynasicTests;
+			productName = dynasicTests;
+			productReference = A10000110000000000000004 /* dynasicTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000510000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					A10000410000000000000001 = { CreatedOnToolsVersion = 26.6; };
+					A10000410000000000000002 = { CreatedOnToolsVersion = 26.6; TestTargetID = A10000410000000000000001; };
+				};
+			};
+			buildConfigurationList = A10000610000000000000001 /* Build configuration list for PBXProject "dynasic" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10000310000000000000001;
+			productRefGroup = A10000310000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000410000000000000001 /* dynasic */,
+				A10000410000000000000002 /* dynasicTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000210000000000000005 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000006 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10000710000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A10000410000000000000001 /* dynasic */; targetProxy = A10000710000000000000002 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000710000000000000002 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = A10000510000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A10000410000000000000001; remoteInfo = dynasic; };
+/* End PBXContainerItemProxy section */
+
+/* Begin XCBuildConfiguration section */
+		A10000810000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000810000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A10000810000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
+				INFOPLIST_KEY_CFBundleName = dynasic;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "dynasic reads Apple Music playback information to synchronize lyrics.";
+				INFOPLIST_KEY_NSHighResolutionCapable = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasic;
+				PRODUCT_NAME = dynasic;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000810000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
+				INFOPLIST_KEY_CFBundleName = dynasic;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "dynasic reads Apple Music playback information to synchronize lyrics.";
+				INFOPLIST_KEY_NSHighResolutionCapable = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasic;
+				PRODUCT_NAME = dynasic;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A10000810000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasicTests;
+				PRODUCT_NAME = dynasicTests;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/dynasic.app/Contents/MacOS/dynasic";
+			};
+			name = Debug;
+		};
+		A10000810000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasicTests;
+				PRODUCT_NAME = dynasicTests;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/dynasic.app/Contents/MacOS/dynasic";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000610000000000000001 /* Build configuration list for PBXProject "dynasic" */ = {isa = XCConfigurationList; buildConfigurations = (A10000810000000000000001 /* Debug */, A10000810000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000610000000000000002 /* Build configuration list for PBXNativeTarget "dynasic" */ = {isa = XCConfigurationList; buildConfigurations = (A10000810000000000000003 /* Debug */, A10000810000000000000004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000610000000000000003 /* Build configuration list for PBXNativeTarget "dynasicTests" */ = {isa = XCConfigurationList; buildConfigurations = (A10000810000000000000005 /* Debug */, A10000810000000000000006 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000510000000000000001 /* Project object */;
+}

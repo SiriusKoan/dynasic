@@ -2,7 +2,7 @@
 
 ## Scope
 
-DynamicLyrics is a native macOS lyrics overlay for Apple Music only.
+dynasic is a native macOS lyrics overlay for Apple Music only.
 
 Do not add support for:
 - Spotify

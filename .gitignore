@@ -1,2 +1,9 @@
 .build/
 .DS_Store
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.dSYM
+*.xcarchive
+*.ipa

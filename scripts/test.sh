@@ -10,14 +10,14 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
     exit 2
 fi
 
-if [ ! -d "$ROOT_DIR/DynamicLyrics.xcodeproj" ]; then
-    echo "ERROR: DynamicLyrics.xcodeproj is not present; app tests cannot run." >&2
+if [ ! -d "$ROOT_DIR/dynasic.xcodeproj" ]; then
+    echo "ERROR: dynasic.xcodeproj is not present; app tests cannot run." >&2
     exit 2
 fi
 
 xcodebuild \
-    -project "$ROOT_DIR/DynamicLyrics.xcodeproj" \
-    -scheme DynamicLyrics \
+    -project "$ROOT_DIR/dynasic.xcodeproj" \
+    -scheme dynasic \
     -configuration Debug \
     -destination 'platform=macOS' \
     CODE_SIGNING_ALLOWED=NO \
