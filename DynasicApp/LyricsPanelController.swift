@@ -10,6 +10,11 @@ private final class LyricsPanelWindow: NSPanel {
     private var movedDuringPointer = false
     private var resizedDuringPointer = false
     private var pointerDownOrigin: NSPoint?
+    private var pointerDownLocationInWindow: NSPoint?
+
+    var shouldSuppressCollapsedToggle: Bool {
+        movedDuringPointer
+    }
 
     override func sendEvent(_ event: NSEvent) {
         switch event.type {
@@ -18,7 +23,15 @@ private final class LyricsPanelWindow: NSPanel {
             movedDuringPointer = false
             resizedDuringPointer = false
             pointerDownOrigin = frame.origin
+            pointerDownLocationInWindow = event.locationInWindow
         case .leftMouseDragged:
+            if let pointerDownLocationInWindow,
+               hypot(
+                   event.locationInWindow.x - pointerDownLocationInWindow.x,
+                   event.locationInWindow.y - pointerDownLocationInWindow.y
+               ) > 2 {
+                movedDuringPointer = true
+            }
             let wasLiveResizing = inLiveResize
             super.sendEvent(event)
             resizedDuringPointer = resizedDuringPointer || wasLiveResizing || inLiveResize
@@ -32,6 +45,7 @@ private final class LyricsPanelWindow: NSPanel {
             movedDuringPointer = false
             resizedDuringPointer = false
             pointerDownOrigin = nil
+            pointerDownLocationInWindow = nil
             super.sendEvent(event)
             if didFinishMoving {
                 onUserFinishedMoving?()
@@ -47,7 +61,7 @@ private final class LyricsPanelWindow: NSPanel {
 
 @MainActor
 final class LyricsPanelController: ObservableObject {
-    static let minimumExpandedSize = NSSize(width: 420, height: 160)
+    static let minimumExpandedSize = NSSize(width: 420, height: 120)
     static let collapsedSize = NSSize(width: 56, height: 56)
 
     private let state: DynasicAppState
@@ -130,7 +144,8 @@ final class LyricsPanelController: ObservableObject {
     }
 
     func toggleCollapsed() {
-        guard !isAnimatingFrame else { return }
+        guard !isAnimatingFrame,
+              !(panel?.shouldSuppressCollapsedToggle ?? false) else { return }
         if isCollapsed {
             expand()
         } else {

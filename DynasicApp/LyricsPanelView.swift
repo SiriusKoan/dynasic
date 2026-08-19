@@ -18,6 +18,7 @@ struct LyricsPanelView: View {
                             .resizable()
                             .scaledToFill()
                             .frame(width: proxy.size.width, height: proxy.size.height)
+                            .padding(3)
                             .clipped()
                     }
                 }
@@ -200,18 +201,18 @@ struct LyricsPanelView: View {
                 if state.settings.showsPreviousLine, let previous = lines.previous {
                     Text(previous.text)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(nil)
                 }
 
                 Text(lines.current)
                     .font(.system(size: state.settings.lyricsFontSize, weight: .semibold))
-                    .lineLimit(2)
+                    .lineLimit(nil)
                     .multilineTextAlignment(textAlignment)
 
                 if state.settings.showsNextLine, let next = lines.next {
                     Text(next.text)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(nil)
                 }
             } else {
                 Text("No lyrics")
