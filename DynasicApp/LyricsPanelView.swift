@@ -10,20 +10,18 @@ struct LyricsPanelView: View {
     var body: some View {
         Group {
             if controller.isCollapsed {
-                Button {
-                    controller.toggleCollapsed()
-                } label: {
-                    GeometryReader { proxy in
-                        Image("DynasicCollapsedIcon")
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                            .padding(3)
-                            .clipped()
-                    }
+                GeometryReader { proxy in
+                    Image("DynasicCollapsedIcon")
+                        .resizable()
+                        .scaledToFill()
+                        .scaleEffect(1.12)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
                 }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Expand lyrics")
+                .accessibilityAddTraits(.isButton)
             } else {
                 regularLayout
                     .overlay(alignment: .topTrailing) {

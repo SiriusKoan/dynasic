@@ -40,6 +40,7 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertTrue(panel.titlebarAppearsTransparent)
         XCTAssertTrue(panel.standardWindowButton(.closeButton)?.isHidden == true)
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
+        XCTAssertEqual(panel.maxSize, LyricsPanelController.maximumExpandedSize)
         XCTAssertTrue(panel.isFloatingPanel)
         XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))

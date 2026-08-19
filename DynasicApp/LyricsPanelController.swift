@@ -5,16 +5,21 @@ import SwiftUI
 @MainActor
 private final class LyricsPanelWindow: NSPanel {
     var onUserFinishedMoving: (() -> Void)?
+    var onUserTapped: (() -> Void)?
 
     private var pointerIsDown = false
     private var movedDuringPointer = false
     private var resizedDuringPointer = false
     private var pointerDownOrigin: NSPoint?
     private var pointerDownLocationInWindow: NSPoint?
+    private var pointerDownScreenLocation: NSPoint?
+    private var lastPointerScreenLocation: NSPoint?
 
     var shouldSuppressCollapsedToggle: Bool {
         movedDuringPointer
     }
+
+    var isCollapsedForInteraction = false
 
     override func sendEvent(_ event: NSEvent) {
         switch event.type {
@@ -24,6 +29,8 @@ private final class LyricsPanelWindow: NSPanel {
             resizedDuringPointer = false
             pointerDownOrigin = frame.origin
             pointerDownLocationInWindow = event.locationInWindow
+            pointerDownScreenLocation = NSEvent.mouseLocation
+            lastPointerScreenLocation = pointerDownScreenLocation
         case .leftMouseDragged:
             if let pointerDownLocationInWindow,
                hypot(
@@ -32,6 +39,27 @@ private final class LyricsPanelWindow: NSPanel {
                ) > 2 {
                 movedDuringPointer = true
             }
+
+            if isCollapsedForInteraction,
+               let lastPointerScreenLocation {
+                let currentScreenLocation = NSEvent.mouseLocation
+                let delta = NSPoint(
+                    x: currentScreenLocation.x - lastPointerScreenLocation.x,
+                    y: currentScreenLocation.y - lastPointerScreenLocation.y
+                )
+                if delta != .zero {
+                    setFrameOrigin(
+                        NSPoint(
+                            x: frame.origin.x + delta.x,
+                            y: frame.origin.y + delta.y
+                        )
+                    )
+                    movedDuringPointer = true
+                    self.lastPointerScreenLocation = currentScreenLocation
+                }
+                return
+            }
+
             let wasLiveResizing = inLiveResize
             super.sendEvent(event)
             resizedDuringPointer = resizedDuringPointer || wasLiveResizing || inLiveResize
@@ -40,15 +68,44 @@ private final class LyricsPanelWindow: NSPanel {
             }
             return
         case .leftMouseUp:
+            if pointerIsDown,
+               !movedDuringPointer,
+               let pointerDownScreenLocation,
+               hypot(
+                   NSEvent.mouseLocation.x - pointerDownScreenLocation.x,
+                   NSEvent.mouseLocation.y - pointerDownScreenLocation.y
+               ) > 2 {
+                movedDuringPointer = true
+
+                if isCollapsedForInteraction {
+                    let endScreenLocation = NSEvent.mouseLocation
+                    setFrameOrigin(
+                        NSPoint(
+                            x: frame.origin.x + endScreenLocation.x - pointerDownScreenLocation.x,
+                            y: frame.origin.y + endScreenLocation.y - pointerDownScreenLocation.y
+                        )
+                    )
+                }
+            }
+
             let didFinishMoving = pointerIsDown && movedDuringPointer && !resizedDuringPointer
+            let didTapCollapsed = isCollapsedForInteraction
+                && pointerIsDown
+                && !movedDuringPointer
+                && !resizedDuringPointer
+            super.sendEvent(event)
             pointerIsDown = false
             movedDuringPointer = false
             resizedDuringPointer = false
             pointerDownOrigin = nil
             pointerDownLocationInWindow = nil
-            super.sendEvent(event)
+            pointerDownScreenLocation = nil
+            lastPointerScreenLocation = nil
             if didFinishMoving {
                 onUserFinishedMoving?()
+            }
+            if didTapCollapsed {
+                onUserTapped?()
             }
             return
         default:
@@ -62,7 +119,8 @@ private final class LyricsPanelWindow: NSPanel {
 @MainActor
 final class LyricsPanelController: ObservableObject {
     static let minimumExpandedSize = NSSize(width: 420, height: 120)
-    static let collapsedSize = NSSize(width: 56, height: 56)
+    static let maximumExpandedSize = NSSize(width: 10_000, height: 360)
+    static let collapsedSize = NSSize(width: 40, height: 40)
 
     private let state: DynasicAppState
     private let userDefaults: UserDefaults
@@ -172,7 +230,8 @@ final class LyricsPanelController: ObservableObject {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.minSize = Self.minimumExpandedSize
-        expandedMaximumSize = panel.maxSize
+        expandedMaximumSize = Self.maximumExpandedSize
+        panel.maxSize = Self.maximumExpandedSize
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -186,6 +245,9 @@ final class LyricsPanelController: ObservableObject {
         panel.isReleasedWhenClosed = false
         panel.onUserFinishedMoving = { [weak self] in
             self?.finishUserMove()
+        }
+        panel.onUserTapped = { [weak self] in
+            self?.toggleCollapsed()
         }
         self.panel = panel
         panel.contentView = NSHostingView(rootView: LyricsPanelView(state: state, controller: self))
@@ -238,7 +300,10 @@ final class LyricsPanelController: ObservableObject {
             x: values[0],
             y: values[1],
             width: max(values[2], Self.minimumExpandedSize.width),
-            height: max(values[3], Self.minimumExpandedSize.height)
+            height: min(
+                max(values[3], Self.minimumExpandedSize.height),
+                Self.maximumExpandedSize.height
+            )
         )
     }
 
@@ -270,6 +335,7 @@ final class LyricsPanelController: ObservableObject {
         expandedFrame = panel.frame
         saveFrame(panel.frame)
         isCollapsed = true
+        panel.isCollapsedForInteraction = true
         panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
             x: panel.frame.minX,
@@ -291,6 +357,7 @@ final class LyricsPanelController: ObservableObject {
 
         let frame = frameConstrainedToVisibleScreen(expandedFrame ?? panel.frame)
         isCollapsed = false
+        panel.isCollapsedForInteraction = false
         panel.minSize = NSSize(width: 1, height: 1)
         if let expandedMaximumSize {
             panel.maxSize = expandedMaximumSize
@@ -376,7 +443,11 @@ final class LyricsPanelController: ObservableObject {
 
         let visible = screen.visibleFrame
         let width = min(max(frame.width, Self.minimumExpandedSize.width), visible.width)
-        let height = min(max(frame.height, Self.minimumExpandedSize.height), visible.height)
+        let height = min(
+            max(frame.height, Self.minimumExpandedSize.height),
+            Self.maximumExpandedSize.height,
+            visible.height
+        )
         let x = min(max(frame.minX, visible.minX), visible.maxX - width)
         let y = min(max(frame.minY, visible.minY), visible.maxY - height)
         return NSRect(x: x, y: y, width: width, height: height)
