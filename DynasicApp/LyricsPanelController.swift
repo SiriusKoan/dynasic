@@ -7,112 +7,66 @@ private final class LyricsPanelWindow: NSPanel {
     var onUserFinishedMoving: (() -> Void)?
     var onUserTapped: (() -> Void)?
 
-    private var pointerIsDown = false
-    private var movedDuringPointer = false
-    private var resizedDuringPointer = false
-    private var pointerDownOrigin: NSPoint?
-    private var pointerDownLocationInWindow: NSPoint?
-    private var pointerDownScreenLocation: NSPoint?
-    private var lastPointerScreenLocation: NSPoint?
-
-    var shouldSuppressCollapsedToggle: Bool {
-        movedDuringPointer
-    }
-
     var isCollapsedForInteraction = false
 
-    override func sendEvent(_ event: NSEvent) {
-        switch event.type {
-        case .leftMouseDown:
-            pointerIsDown = true
-            movedDuringPointer = false
-            resizedDuringPointer = false
-            pointerDownOrigin = frame.origin
-            pointerDownLocationInWindow = event.locationInWindow
-            pointerDownScreenLocation = NSEvent.mouseLocation
-            lastPointerScreenLocation = pointerDownScreenLocation
-        case .leftMouseDragged:
-            if let pointerDownLocationInWindow,
-               hypot(
-                   event.locationInWindow.x - pointerDownLocationInWindow.x,
-                   event.locationInWindow.y - pointerDownLocationInWindow.y
-               ) > 2 {
-                movedDuringPointer = true
-            }
+    private var pointerDownFrame: NSRect?
+    private var collapsedPointerDownLocation: NSPoint?
+    private var collapsedPointerDownOrigin: NSPoint?
+    private var didMoveCollapsedPanel = false
 
-            if isCollapsedForInteraction,
-               let lastPointerScreenLocation {
-                let currentScreenLocation = NSEvent.mouseLocation
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown {
+            pointerDownFrame = frame
+            if isCollapsedForInteraction {
+                collapsedPointerDownLocation = convertPoint(toScreen: event.locationInWindow)
+                collapsedPointerDownOrigin = frame.origin
+                didMoveCollapsedPanel = false
+            }
+        }
+
+        if isCollapsedForInteraction {
+            switch event.type {
+            case .leftMouseDragged:
+                guard let collapsedPointerDownLocation,
+                      let collapsedPointerDownOrigin else { return }
+                let currentLocation = convertPoint(toScreen: event.locationInWindow)
                 let delta = NSPoint(
-                    x: currentScreenLocation.x - lastPointerScreenLocation.x,
-                    y: currentScreenLocation.y - lastPointerScreenLocation.y
+                    x: currentLocation.x - collapsedPointerDownLocation.x,
+                    y: currentLocation.y - collapsedPointerDownLocation.y
                 )
-                if delta != .zero {
-                    setFrameOrigin(
-                        NSPoint(
-                            x: frame.origin.x + delta.x,
-                            y: frame.origin.y + delta.y
-                        )
+                guard abs(delta.x) > 0.5 || abs(delta.y) > 0.5 else { return }
+                setFrameOrigin(
+                    NSPoint(
+                        x: collapsedPointerDownOrigin.x + delta.x,
+                        y: collapsedPointerDownOrigin.y + delta.y
                     )
-                    movedDuringPointer = true
-                    self.lastPointerScreenLocation = currentScreenLocation
+                )
+                didMoveCollapsedPanel = true
+                return
+            case .leftMouseUp:
+                let didMove = didMoveCollapsedPanel
+                pointerDownFrame = nil
+                collapsedPointerDownLocation = nil
+                collapsedPointerDownOrigin = nil
+                didMoveCollapsedPanel = false
+                if didMove {
+                    onUserFinishedMoving?()
+                } else {
+                    onUserTapped?()
                 }
                 return
+            default:
+                break
             }
-
-            let wasLiveResizing = inLiveResize
-            super.sendEvent(event)
-            resizedDuringPointer = resizedDuringPointer || wasLiveResizing || inLiveResize
-            if let pointerDownOrigin, frame.origin != pointerDownOrigin {
-                movedDuringPointer = true
-            }
-            return
-        case .leftMouseUp:
-            if pointerIsDown,
-               !movedDuringPointer,
-               let pointerDownScreenLocation,
-               hypot(
-                   NSEvent.mouseLocation.x - pointerDownScreenLocation.x,
-                   NSEvent.mouseLocation.y - pointerDownScreenLocation.y
-               ) > 2 {
-                movedDuringPointer = true
-
-                if isCollapsedForInteraction {
-                    let endScreenLocation = NSEvent.mouseLocation
-                    setFrameOrigin(
-                        NSPoint(
-                            x: frame.origin.x + endScreenLocation.x - pointerDownScreenLocation.x,
-                            y: frame.origin.y + endScreenLocation.y - pointerDownScreenLocation.y
-                        )
-                    )
-                }
-            }
-
-            let didFinishMoving = pointerIsDown && movedDuringPointer && !resizedDuringPointer
-            let didTapCollapsed = isCollapsedForInteraction
-                && pointerIsDown
-                && !movedDuringPointer
-                && !resizedDuringPointer
-            super.sendEvent(event)
-            pointerIsDown = false
-            movedDuringPointer = false
-            resizedDuringPointer = false
-            pointerDownOrigin = nil
-            pointerDownLocationInWindow = nil
-            pointerDownScreenLocation = nil
-            lastPointerScreenLocation = nil
-            if didFinishMoving {
-                onUserFinishedMoving?()
-            }
-            if didTapCollapsed {
-                onUserTapped?()
-            }
-            return
-        default:
-            break
         }
 
         super.sendEvent(event)
+        guard event.type == .leftMouseUp else { return }
+        let didMove = pointerDownFrame.map { frame != $0 } ?? false
+        pointerDownFrame = nil
+        if didMove {
+            onUserFinishedMoving?()
+        }
     }
 }
 
@@ -134,6 +88,7 @@ final class LyricsPanelController: ObservableObject {
     private var isAnimatingFrame = false
     private var expandedFrame: NSRect?
     private var expandedMaximumSize: NSSize?
+    private var collapsedFrameOrigin: NSPoint?
 
     @Published private(set) var isCollapsed = false
 
@@ -202,8 +157,7 @@ final class LyricsPanelController: ObservableObject {
     }
 
     func toggleCollapsed() {
-        guard !isAnimatingFrame,
-              !(panel?.shouldSuppressCollapsedToggle ?? false) else { return }
+        guard !isAnimatingFrame else { return }
         if isCollapsed {
             expand()
         } else {
@@ -220,20 +174,16 @@ final class LyricsPanelController: ObservableObject {
 
         let panel = LyricsPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 260),
-            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel, .resizable],
+            styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
         )
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
         expandedMaximumSize = Self.maximumExpandedSize
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isFloatingPanel = true
+        panel.isMovable = true
         panel.level = state.settings.isAlwaysOnTop ? .floating : .normal
         panel.ignoresMouseEvents = state.settings.isClickThrough
         panel.isFloatingPanel = state.settings.isAlwaysOnTop
@@ -319,9 +269,29 @@ final class LyricsPanelController: ObservableObject {
     }
 
     private func recordFrameChange(_ window: NSWindow) {
-        guard !isCollapsed, !isApplyingFrame else { return }
+        guard !isApplyingFrame else { return }
+        if isCollapsed {
+            recordCollapsedFrameChange(window.frame)
+            return
+        }
         expandedFrame = window.frame
         saveFrame(window.frame)
+    }
+
+    private func recordCollapsedFrameChange(_ frame: NSRect) {
+        guard let collapsedFrameOrigin,
+              let expandedFrame else { return }
+
+        let delta = NSPoint(
+            x: frame.origin.x - collapsedFrameOrigin.x,
+            y: frame.origin.y - collapsedFrameOrigin.y
+        )
+        guard delta != .zero else { return }
+
+        let movedExpandedFrame = expandedFrame.offsetBy(dx: delta.x, dy: delta.y)
+        self.expandedFrame = movedExpandedFrame
+        self.collapsedFrameOrigin = frame.origin
+        saveFrame(movedExpandedFrame)
     }
 
     private func saveFrame(_ frame: NSRect) {
@@ -338,6 +308,7 @@ final class LyricsPanelController: ObservableObject {
         saveFrame(panel.frame)
         isCollapsed = true
         panel.isCollapsedForInteraction = true
+        panel.isMovableByWindowBackground = false
         panel.styleMask.remove(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
@@ -346,6 +317,7 @@ final class LyricsPanelController: ObservableObject {
             width: Self.collapsedSize.width,
             height: Self.collapsedSize.height
         )
+        collapsedFrameOrigin = collapsedFrame.origin
         panel.ignoresMouseEvents = false
         animateFrame(collapsedFrame, on: panel) { [weak self, weak panel] in
             guard let self, let panel else { return }
@@ -360,7 +332,9 @@ final class LyricsPanelController: ObservableObject {
 
         let frame = frameConstrainedToVisibleScreen(expandedFrame ?? panel.frame)
         isCollapsed = false
+        collapsedFrameOrigin = nil
         panel.isCollapsedForInteraction = false
+        panel.isMovableByWindowBackground = true
         panel.styleMask.remove(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
         if let expandedMaximumSize {
@@ -416,7 +390,9 @@ final class LyricsPanelController: ObservableObject {
             applyFrame(nearestCornerFrame(for: panel.frame), to: panel)
         }
 
-        if !isCollapsed {
+        if isCollapsed {
+            recordCollapsedFrameChange(panel.frame)
+        } else {
             expandedFrame = panel.frame
             saveFrame(panel.frame)
         }

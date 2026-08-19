@@ -34,12 +34,13 @@ final class LyricsPanelControllerTests: XCTestCase {
         controller.show()
         let panel = try! XCTUnwrap(controller.panelForTesting)
 
-        XCTAssertTrue(panel.styleMask.contains(.titled))
-        XCTAssertTrue(panel.styleMask.contains(.fullSizeContentView))
+        XCTAssertTrue(panel.styleMask.contains(.borderless))
+        XCTAssertFalse(panel.styleMask.contains(.titled))
+        XCTAssertFalse(panel.styleMask.contains(.fullSizeContentView))
         XCTAssertTrue(panel.styleMask.contains(.resizable))
-        XCTAssertEqual(panel.titleVisibility, .hidden)
-        XCTAssertTrue(panel.titlebarAppearsTransparent)
-        XCTAssertTrue(panel.standardWindowButton(.closeButton)?.isHidden == true)
+        XCTAssertNil(panel.standardWindowButton(.closeButton))
+        XCTAssertNil(panel.standardWindowButton(.miniaturizeButton))
+        XCTAssertNil(panel.standardWindowButton(.zoomButton))
         let hostingView = try! XCTUnwrap(panel.contentView as? NSHostingView<LyricsPanelView>)
         XCTAssertTrue(hostingView.sizingOptions.isEmpty)
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
@@ -166,6 +167,43 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertTrue(panel.styleMask.contains(.resizable))
     }
 
+    func testCollapsedMouseDragMovesWithoutExpanding() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let controller = LyricsPanelController(
+            state: DynasicAppState(userDefaults: defaults),
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let expandedFrame = NSRect(x: 140, y: 180, width: 520, height: 240)
+        panel.setFrame(expandedFrame, display: false)
+        controller.finishUserMoveForTesting()
+        controller.toggleCollapsed()
+
+        let startLocation = NSPoint(x: panel.frame.minX + 10, y: panel.frame.minY + 10)
+        let endLocation = NSPoint(x: startLocation.x + 80, y: startLocation.y + 60)
+        panel.sendEvent(mouseEvent(.leftMouseDown, at: startLocation, for: panel))
+        panel.sendEvent(mouseEvent(.leftMouseDragged, at: endLocation, for: panel))
+        panel.sendEvent(mouseEvent(.leftMouseUp, at: endLocation, for: panel))
+
+        XCTAssertTrue(controller.isCollapsed)
+        XCTAssertEqual(
+            panel.frame.origin,
+            NSPoint(
+                x: expandedFrame.minX + 80,
+                y: expandedFrame.maxY - LyricsPanelController.collapsedSize.height + 60
+            )
+        )
+
+        controller.toggleCollapsed()
+        XCTAssertEqual(
+            panel.frame,
+            expandedFrame.offsetBy(dx: 80, dy: 60)
+        )
+    }
+
     func testStickyToCornerRunsOnlyWhenUserMoveFinishes() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
@@ -187,5 +225,23 @@ final class LyricsPanelControllerTests: XCTestCase {
             return xMatches && yMatches
         }
         XCTAssertTrue(isAtCorner)
+    }
+
+    private func mouseEvent(
+        _ type: NSEvent.EventType,
+        at location: NSPoint,
+        for panel: NSPanel
+    ) -> NSEvent {
+        NSEvent.mouseEvent(
+            with: type,
+            location: location,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: panel.windowNumber,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 1,
+            pressure: 1
+        )!
     }
 }

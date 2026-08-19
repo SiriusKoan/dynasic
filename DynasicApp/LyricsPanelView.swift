@@ -11,17 +11,18 @@ struct LyricsPanelView: View {
         Group {
             if controller.isCollapsed {
                 GeometryReader { proxy in
-                    Image("DynasicCollapsedIcon")
-                        .resizable()
-                        .scaledToFill()
-                        .scaleEffect(1.12)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
+                    ZStack {
+                        Image("DynasicCollapsedIcon")
+                            .resizable()
+                            .scaledToFill()
+                            .scaleEffect(1.12)
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
                 }
                 .contentShape(Rectangle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Expand lyrics")
-                .accessibilityAddTraits(.isButton)
             } else {
                 regularLayout
                     .overlay(alignment: .topTrailing) {
@@ -64,7 +65,7 @@ struct LyricsPanelView: View {
 
                 Rectangle()
                     .fill(.separator)
-                    .frame(width: 1, height: 160)
+                    .frame(width: 1, height: 72)
 
                 lyricsContent
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -83,22 +84,26 @@ struct LyricsPanelView: View {
 
     private var trackSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
-            artworkView
-                .frame(width: 96, height: 96)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            HStack(alignment: .center, spacing: 12) {
+                artworkView
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
 
-            Text(state.trackTitle)
-                .font(.headline)
-                .lineLimit(2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(state.trackTitle)
+                        .font(.headline)
+                        .lineLimit(2)
 
-            Text(state.trackArtist.isEmpty ? "—" : state.trackArtist)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+                    Text(state.trackArtist.isEmpty ? "—" : state.trackArtist)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
 
             playbackProgress
         }
-        .frame(minWidth: 130, idealWidth: 160, maxWidth: 200, alignment: .leading)
+        .frame(minWidth: 180, idealWidth: 220, maxWidth: 280, alignment: .leading)
     }
 
     @ViewBuilder
