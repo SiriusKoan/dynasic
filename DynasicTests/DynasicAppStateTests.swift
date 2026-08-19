@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 import LyricsCore
 
@@ -157,6 +158,100 @@ final class DynasicAppStateTests: XCTestCase {
 
         XCTAssertEqual(state.lastPlaybackControlError, "Playback control failed")
     }
+
+    func testUnavailableArtworkIsRequestedOnTrackChangesAndRetriedAfterReturning() async {
+        let firstTrack = TrackMetadata(
+            title: "First Song",
+            artist: "Artist",
+            persistentID: "track-1"
+        )
+        let secondTrack = TrackMetadata(
+            title: "Second Song",
+            artist: "Artist",
+            persistentID: "track-2"
+        )
+        let backend = SequenceObservationBackend(snapshots: [
+            PlaybackSnapshot(
+                track: firstTrack,
+                state: .playing,
+                position: 1,
+                observedAt: ContinuousClock().now
+            ),
+            PlaybackSnapshot(
+                track: firstTrack,
+                state: .playing,
+                position: 2,
+                observedAt: ContinuousClock().now
+            ),
+            PlaybackSnapshot(
+                track: secondTrack,
+                state: .playing,
+                position: 1,
+                observedAt: ContinuousClock().now
+            ),
+            PlaybackSnapshot(
+                track: firstTrack,
+                state: .playing,
+                position: 3,
+                observedAt: ContinuousClock().now
+            )
+        ])
+        let artworkProvider = RecordingArtworkProvider()
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-artwork-\(UUID().uuidString)")!,
+            musicBackend: backend,
+            artworkProvider: artworkProvider
+        )
+
+        await state.observeOnceForTesting()
+        await state.waitForArtworkForTesting()
+        await state.observeOnceForTesting()
+        await state.waitForArtworkForTesting()
+        await state.observeOnceForTesting()
+        await state.waitForArtworkForTesting()
+        await state.observeOnceForTesting()
+        await state.waitForArtworkForTesting()
+
+        let requests = await artworkProvider.requests()
+        XCTAssertEqual(requests, [firstTrack, secondTrack, firstTrack])
+        XCTAssertNil(state.trackArtwork)
+    }
+
+    func testAvailableArtworkIsCachedByTrackIdentity() async throws {
+        let firstTrack = TrackMetadata(
+            title: "First Song",
+            artist: "Artist",
+            persistentID: "track-1"
+        )
+        let secondTrack = TrackMetadata(
+            title: "Second Song",
+            artist: "Artist",
+            persistentID: "track-2"
+        )
+        let imageData = try XCTUnwrap(Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        ))
+        let backend = SequenceObservationBackend(snapshots: [
+            PlaybackSnapshot(track: firstTrack, state: .playing, position: 1, observedAt: ContinuousClock().now),
+            PlaybackSnapshot(track: secondTrack, state: .playing, position: 1, observedAt: ContinuousClock().now),
+            PlaybackSnapshot(track: firstTrack, state: .playing, position: 2, observedAt: ContinuousClock().now)
+        ])
+        let artworkProvider = RecordingArtworkProvider(data: imageData)
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-artwork-cache-\(UUID().uuidString)")!,
+            musicBackend: backend,
+            artworkProvider: artworkProvider
+        )
+
+        for _ in 0..<3 {
+            await state.observeOnceForTesting()
+            await state.waitForArtworkForTesting()
+        }
+
+        let requests = await artworkProvider.requests()
+        XCTAssertEqual(requests, [firstTrack, secondTrack])
+        XCTAssertNotNil(state.trackArtwork)
+    }
 }
 
 private struct StubObservationBackend: AppleMusicObservationBackend {
@@ -192,5 +287,35 @@ private actor RecordingPlaybackController: PlaybackControlling {
 private actor FailingPlaybackController: PlaybackControlling {
     func perform(_ command: PlaybackControlCommand) async throws {
         throw PlaybackControlError.scriptFailed("Playback control failed")
+    }
+}
+
+private actor SequenceObservationBackend: AppleMusicObservationBackend {
+    private var snapshots: [PlaybackSnapshot]
+
+    init(snapshots: [PlaybackSnapshot]) {
+        self.snapshots = snapshots
+    }
+
+    func snapshot() async throws -> PlaybackSnapshot {
+        snapshots.removeFirst()
+    }
+}
+
+private actor RecordingArtworkProvider: AppleMusicArtworkProviding {
+    private let data: Data?
+    private var recordedTracks: [TrackMetadata] = []
+
+    init(data: Data? = nil) {
+        self.data = data
+    }
+
+    func artwork(for track: TrackMetadata) async throws -> Data? {
+        recordedTracks.append(track)
+        return data
+    }
+
+    func requests() -> [TrackMetadata] {
+        recordedTracks
     }
 }

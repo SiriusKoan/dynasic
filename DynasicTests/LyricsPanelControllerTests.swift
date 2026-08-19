@@ -33,8 +33,12 @@ final class LyricsPanelControllerTests: XCTestCase {
         controller.show()
         let panel = try! XCTUnwrap(controller.panelForTesting)
 
-        XCTAssertTrue(panel.styleMask.contains(.borderless))
+        XCTAssertTrue(panel.styleMask.contains(.titled))
+        XCTAssertTrue(panel.styleMask.contains(.fullSizeContentView))
         XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertEqual(panel.titleVisibility, .hidden)
+        XCTAssertTrue(panel.titlebarAppearsTransparent)
+        XCTAssertTrue(panel.standardWindowButton(.closeButton)?.isHidden == true)
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
         XCTAssertTrue(panel.isFloatingPanel)
         XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
@@ -64,7 +68,8 @@ final class LyricsPanelControllerTests: XCTestCase {
         let controller = LyricsPanelController(
             state: DynasicAppState(userDefaults: defaults),
             userDefaults: defaults,
-            positionKey: "frame"
+            positionKey: "frame",
+            animationDuration: 0
         )
 
         controller.show()
@@ -114,11 +119,31 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertTrue(NSScreen.screens.contains { $0.visibleFrame.contains(panel.frame) })
     }
 
+    func testShowingExistingPanelBringsItsFrameBackOnScreen() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let controller = LyricsPanelController(
+            state: DynasicAppState(userDefaults: defaults),
+            userDefaults: defaults
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: -10_000))
+        controller.hide()
+        controller.show()
+
+        XCTAssertTrue(NSScreen.screens.contains { $0.visibleFrame.contains(panel.frame) })
+    }
+
     func testClickThroughIsRestoredOnlyAfterExpanding() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
         state.settings.isClickThrough = true
-        let controller = LyricsPanelController(state: state, userDefaults: defaults)
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
 
         controller.show()
         let panel = try XCTUnwrap(controller.panelForTesting)
@@ -126,9 +151,13 @@ final class LyricsPanelControllerTests: XCTestCase {
 
         controller.toggleCollapsed()
         XCTAssertFalse(panel.ignoresMouseEvents)
+        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertEqual(panel.minSize, LyricsPanelController.collapsedSize)
+        XCTAssertEqual(panel.maxSize, LyricsPanelController.collapsedSize)
 
         controller.toggleCollapsed()
         XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertTrue(panel.styleMask.contains(.resizable))
     }
 
     func testStickyToCornerRunsOnlyWhenUserMoveFinishes() throws {

@@ -54,10 +54,12 @@ final class LyricsPanelController: ObservableObject {
     private let userDefaults: UserDefaults
     private let frameKey: String
     private let legacyOriginKey: String
+    private let animationDuration: TimeInterval
     private var panel: LyricsPanelWindow?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
     private var isApplyingFrame = false
+    private var isAnimatingFrame = false
     private var expandedFrame: NSRect?
     private var expandedMaximumSize: NSSize?
 
@@ -67,12 +69,14 @@ final class LyricsPanelController: ObservableObject {
         state: DynasicAppState,
         userDefaults: UserDefaults = .standard,
         positionKey: String = "dynasic.lyricsPanel.frame",
-        legacyOriginKey: String = "dynasic.lyricsPanel.origin"
+        legacyOriginKey: String = "dynasic.lyricsPanel.origin",
+        animationDuration: TimeInterval = 0.22
     ) {
         self.state = state
         self.userDefaults = userDefaults
         self.frameKey = positionKey
         self.legacyOriginKey = legacyOriginKey
+        self.animationDuration = max(0, animationDuration)
     }
 
     deinit {
@@ -87,6 +91,12 @@ final class LyricsPanelController: ObservableObject {
     func show() {
         let panel = makePanelIfNeeded()
         panel.orderFrontRegardless()
+        guard !isCollapsed else { return }
+
+        let visibleFrame = frameConstrainedToVisibleScreen(panel.frame)
+        applyFrame(visibleFrame, to: panel)
+        expandedFrame = visibleFrame
+        saveFrame(visibleFrame)
     }
 
     func hide() {
@@ -108,7 +118,19 @@ final class LyricsPanelController: ObservableObject {
 
     var panelForTesting: NSPanel? { panel }
 
+    var frameDescription: String {
+        guard let frame = panel?.frame else { return "not created" }
+        return String(
+            format: "x=%.0f y=%.0f width=%.0f height=%.0f",
+            frame.origin.x,
+            frame.origin.y,
+            frame.width,
+            frame.height
+        )
+    }
+
     func toggleCollapsed() {
+        guard !isAnimatingFrame else { return }
         if isCollapsed {
             expand()
         } else {
@@ -125,10 +147,15 @@ final class LyricsPanelController: ObservableObject {
 
         let panel = LyricsPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 260),
-            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
         )
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.minSize = Self.minimumExpandedSize
         expandedMaximumSize = panel.maxSize
         panel.isOpaque = false
@@ -228,16 +255,20 @@ final class LyricsPanelController: ObservableObject {
         expandedFrame = panel.frame
         saveFrame(panel.frame)
         isCollapsed = true
-        panel.minSize = Self.collapsedSize
-        panel.maxSize = Self.collapsedSize
+        panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
             x: panel.frame.minX,
             y: panel.frame.maxY - Self.collapsedSize.height,
             width: Self.collapsedSize.width,
             height: Self.collapsedSize.height
         )
-        applyFrame(collapsedFrame, to: panel)
         panel.ignoresMouseEvents = false
+        animateFrame(collapsedFrame, on: panel) { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            panel.minSize = Self.collapsedSize
+            panel.maxSize = Self.collapsedSize
+            self.isApplyingFrame = false
+        }
     }
 
     private func expand() {
@@ -245,20 +276,50 @@ final class LyricsPanelController: ObservableObject {
 
         let frame = frameConstrainedToVisibleScreen(expandedFrame ?? panel.frame)
         isCollapsed = false
+        panel.minSize = NSSize(width: 1, height: 1)
         if let expandedMaximumSize {
             panel.maxSize = expandedMaximumSize
         }
-        panel.minSize = Self.minimumExpandedSize
-        applyFrame(frame, to: panel)
-        expandedFrame = panel.frame
-        saveFrame(panel.frame)
         panel.ignoresMouseEvents = state.settings.isClickThrough
+        animateFrame(frame, on: panel) { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            panel.minSize = Self.minimumExpandedSize
+            self.expandedFrame = panel.frame
+            self.saveFrame(panel.frame)
+            self.isApplyingFrame = false
+        }
     }
 
     private func applyFrame(_ frame: NSRect, to panel: NSWindow) {
         isApplyingFrame = true
         panel.setFrame(frame, display: false, animate: false)
         isApplyingFrame = false
+    }
+
+    private func animateFrame(
+        _ frame: NSRect,
+        on panel: NSWindow,
+        completion: @escaping @MainActor () -> Void
+    ) {
+        isApplyingFrame = true
+        isAnimatingFrame = true
+        guard animationDuration > 0 else {
+            panel.setFrame(frame, display: false, animate: false)
+            isAnimatingFrame = false
+            completion()
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(frame, display: true)
+        } completionHandler: {
+            MainActor.assumeIsolated {
+                self.isAnimatingFrame = false
+                completion()
+            }
+        }
     }
 
     private func finishUserMove() {

@@ -61,6 +61,22 @@ final class AppleMusicObservationServiceTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+
+    func testArtworkServiceRequestsArtworkThroughInjectedRunner() async throws {
+        let track = TrackMetadata(
+            title: "Midnight City",
+            artist: "M83",
+            persistentID: "123456789"
+        )
+        let runner = RecordingArtworkScriptRunner(data: Data([0x01, 0x02, 0x03]))
+        let service = AppleMusicArtworkService(scriptRunner: runner)
+
+        let artwork = try await service.artwork(for: track)
+
+        XCTAssertEqual(artwork, Data([0x01, 0x02, 0x03]))
+        let tracks = runner.tracks()
+        XCTAssertEqual(tracks, [track])
+    }
 }
 
 private struct StubScriptRunner: AppleMusicScriptRunner {
@@ -68,5 +84,28 @@ private struct StubScriptRunner: AppleMusicScriptRunner {
 
     func run() throws -> String {
         output
+    }
+}
+
+private final class RecordingArtworkScriptRunner: AppleMusicArtworkScriptRunner, @unchecked Sendable {
+    private let data: Data?
+    private let lock = NSLock()
+    private var recordedTracks: [TrackMetadata] = []
+
+    init(data: Data?) {
+        self.data = data
+    }
+
+    func run(for track: TrackMetadata) throws -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedTracks.append(track)
+        return data
+    }
+
+    func tracks() -> [TrackMetadata] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedTracks
     }
 }

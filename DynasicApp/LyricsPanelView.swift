@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import LyricsCore
@@ -12,8 +13,9 @@ struct LyricsPanelView: View {
                 Button {
                     controller.toggleCollapsed()
                 } label: {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 22, weight: .semibold))
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .buttonStyle(.plain)
@@ -39,6 +41,7 @@ struct LyricsPanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
         .opacity(state.settings.lyricsOpacity)
+        .ignoresSafeArea()
     }
 
     @ViewBuilder
@@ -59,7 +62,7 @@ struct LyricsPanelView: View {
                     .frame(maxHeight: .infinity)
 
                 lyricsContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -72,13 +75,9 @@ struct LyricsPanelView: View {
 
     private var trackSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: "music.note")
-                .font(.system(size: 38, weight: .medium))
-                .foregroundStyle(.secondary)
+            artworkView
                 .frame(width: 96, height: 96)
-                .background(.quaternary)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("Album artwork unavailable")
 
             Text(state.trackTitle)
                 .font(.headline)
@@ -92,6 +91,24 @@ struct LyricsPanelView: View {
             playbackProgress
         }
         .frame(minWidth: 130, idealWidth: 160, maxWidth: 200, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var artworkView: some View {
+        if let artwork = state.trackArtwork {
+            Image(nsImage: artwork)
+                .resizable()
+                .scaledToFill()
+                .accessibilityLabel("Album artwork")
+        } else {
+            ZStack {
+                Color.secondary.opacity(0.16)
+                Image(systemName: "music.note")
+                    .font(.system(size: 38, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("Album artwork unavailable")
+        }
     }
 
     @ViewBuilder
@@ -163,7 +180,7 @@ struct LyricsPanelView: View {
 
     private var lyricsOnlyLayout: some View {
         lyricsContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     @ViewBuilder

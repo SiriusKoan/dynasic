@@ -14,6 +14,8 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var lastObservationLatency: TimeInterval?
     @Published private(set) var lastObservationError: String?
     @Published private(set) var lastPlaybackControlError: String?
+    @Published private(set) var lastArtworkError: String?
+    @Published private(set) var trackArtwork: NSImage?
     @Published var isLyricsVisible = false
     @Published var settings: DynasicSettings {
         didSet {
@@ -31,8 +33,12 @@ final class DynasicAppState: ObservableObject {
     private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
     private let playbackController: any PlaybackControlling
+    private let artworkProvider: any AppleMusicArtworkProviding
     private let updateScheduler = AppUpdateScheduler()
     private var playbackCommandGeneration: UInt64 = 0
+    private var artworkTrackIdentity: TrackIdentity?
+    private var artworkCache: [TrackIdentity: NSImage] = [:]
+    private var artworkTask: Task<Void, Never>?
     private var panelController: LyricsPanelController?
     private var mainWindowController: MainWindowController?
 
@@ -43,10 +49,12 @@ final class DynasicAppState: ObservableObject {
         userDefaults: UserDefaults = .standard,
         musicBackend: any AppleMusicObservationBackend = AppleMusicObservationService(),
         playbackController: any PlaybackControlling = AppleMusicPlaybackController(),
+        artworkProvider: any AppleMusicArtworkProviding = AppleMusicArtworkService(),
         startImmediately: Bool = false
     ) {
         self.musicBackend = musicBackend
         self.playbackController = playbackController
+        self.artworkProvider = artworkProvider
         let settingsStore = DynasicSettingsStore(userDefaults: userDefaults)
         self.settingsStore = settingsStore
         _settings = Published(initialValue: settingsStore.load())
@@ -109,6 +117,10 @@ final class DynasicAppState: ObservableObject {
 
     func refreshViewStateForTesting() async {
         await refreshViewStateNow()
+    }
+
+    func waitForArtworkForTesting() async {
+        await artworkTask?.value
     }
 
     func refreshViewState() {
@@ -177,11 +189,58 @@ final class DynasicAppState: ObservableObject {
 
             await coordinator.process(snapshot: snapshot)
             await refreshViewStateNow()
+            updateArtwork(for: snapshot.track)
         } catch {
             musicBackendStatus = "unavailable"
             lastObservationError = String(describing: error)
             viewState = .musicUnavailable
             estimatedPlaybackPosition = nil
+            updateArtwork(for: nil)
+        }
+    }
+
+    private func updateArtwork(for track: TrackMetadata?) {
+        let identity = track.map(TrackIdentity.init(metadata:))
+        guard identity != artworkTrackIdentity else { return }
+
+        artworkTask?.cancel()
+        artworkTask = nil
+        artworkTrackIdentity = identity
+        trackArtwork = nil
+        lastArtworkError = nil
+
+        guard let track, let identity else { return }
+
+        if let cachedArtwork = artworkCache[identity] {
+            trackArtwork = cachedArtwork
+            return
+        }
+
+        let artworkProvider = self.artworkProvider
+        artworkTask = Task { @MainActor [weak self] in
+            do {
+                let data = try await artworkProvider.artwork(for: track)
+                guard !Task.isCancelled else { return }
+                let image = data.flatMap(NSImage.init(data:))
+                guard let self, self.artworkTrackIdentity == identity else { return }
+                if let image {
+                    self.artworkCache[identity] = image
+                    self.lastArtworkError = nil
+                } else if let data {
+                    self.lastArtworkError = "Artwork data could not be decoded (\(data.count) bytes)"
+                } else {
+                    self.lastArtworkError = "Apple Music returned no artwork data"
+                }
+                self.trackArtwork = image
+                self.artworkTask = nil
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self, self.artworkTrackIdentity == identity else { return }
+                self.trackArtwork = nil
+                self.lastArtworkError = String(describing: error)
+                self.artworkTask = nil
+            }
         }
     }
 
@@ -275,6 +334,7 @@ final class DynasicAppState: ObservableObject {
         clickThrough: \(settings.isClickThrough)
         alwaysOnTop: \(settings.isAlwaysOnTop)
         stickyToCorner: \(settings.isStickyToCorner)
+        panelFrame: \(panelController?.frameDescription ?? "not created")
         showPreviousLine: \(settings.showsPreviousLine)
         showNextLine: \(settings.showsNextLine)
 
@@ -288,6 +348,7 @@ final class DynasicAppState: ObservableObject {
         ------
         last error: \(diagnosticError)
         playback control error: \(lastPlaybackControlError ?? "None")
+        artwork error: \(lastArtworkError ?? "None")
         """
     }
 
@@ -339,5 +400,4 @@ final class DynasicAppState: ObservableObject {
         return "unknown"
         #endif
     }
-
 }
