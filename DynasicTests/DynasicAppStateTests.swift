@@ -10,6 +10,7 @@ final class DynasicAppStateTests: XCTestCase {
 
         XCTAssertFalse(state.isLyricsVisible)
         XCTAssertEqual(state.settings.lyricsOffset, 0)
+        XCTAssertEqual(state.settings.lyricsPanelLayout, .expanded)
         XCTAssertEqual(state.trackTitle, "Nothing Playing")
     }
 
@@ -51,8 +52,10 @@ final class DynasicAppStateTests: XCTestCase {
         firstState.settings.lyricsFontSize = 30
         firstState.settings.lyricsOpacity = 0.7
         firstState.settings.lyricsAlignment = .trailing
+        firstState.settings.lyricsPanelLayout = .lyricsOnly
         firstState.settings.isClickThrough = true
         firstState.settings.isAlwaysOnTop = false
+        firstState.settings.isStickyToCorner = true
         firstState.settings.showsPreviousLine = false
         firstState.settings.showsNextLine = false
 
@@ -62,8 +65,10 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(secondState.settings.lyricsFontSize, 30)
         XCTAssertEqual(secondState.settings.lyricsOpacity, 0.7)
         XCTAssertEqual(secondState.settings.lyricsAlignment, .trailing)
+        XCTAssertEqual(secondState.settings.lyricsPanelLayout, .lyricsOnly)
         XCTAssertTrue(secondState.settings.isClickThrough)
         XCTAssertFalse(secondState.settings.isAlwaysOnTop)
+        XCTAssertTrue(secondState.settings.isStickyToCorner)
         XCTAssertFalse(secondState.settings.showsPreviousLine)
         XCTAssertFalse(secondState.settings.showsNextLine)
     }
@@ -120,6 +125,38 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(state.viewState, .musicUnavailable)
         XCTAssertNotNil(state.lastObservationError)
     }
+
+    func testPlaybackControlsForwardCommandsWithoutBlockingState() async {
+        let playbackController = RecordingPlaybackController()
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-controls-\(UUID().uuidString)")!,
+            playbackController: playbackController
+        )
+
+        let previous = state.previousTrack()
+        let playPause = state.togglePlayPause()
+        let next = state.nextTrack()
+
+        await previous.value
+        await playPause.value
+        await next.value
+
+        let commands = await playbackController.commands()
+        XCTAssertEqual(commands, [.previousTrack, .playPause, .nextTrack])
+        XCTAssertNil(state.lastPlaybackControlError)
+    }
+
+    func testPlaybackControlErrorIsExposed() async {
+        let playbackController = FailingPlaybackController()
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-control-error-\(UUID().uuidString)")!,
+            playbackController: playbackController
+        )
+
+        await state.nextTrack().value
+
+        XCTAssertEqual(state.lastPlaybackControlError, "Playback control failed")
+    }
 }
 
 private struct StubObservationBackend: AppleMusicObservationBackend {
@@ -138,4 +175,22 @@ private struct FailingObservationBackend: AppleMusicObservationBackend {
 
 private enum ObservationTestError: Error {
     case unavailable
+}
+
+private actor RecordingPlaybackController: PlaybackControlling {
+    private var recordedCommands: [PlaybackControlCommand] = []
+
+    func perform(_ command: PlaybackControlCommand) async throws {
+        recordedCommands.append(command)
+    }
+
+    func commands() -> [PlaybackControlCommand] {
+        recordedCommands
+    }
+}
+
+private actor FailingPlaybackController: PlaybackControlling {
+    func perform(_ command: PlaybackControlCommand) async throws {
+        throw PlaybackControlError.scriptFailed("Playback control failed")
+    }
 }

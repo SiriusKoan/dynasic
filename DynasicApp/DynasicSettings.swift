@@ -19,13 +19,31 @@ enum LyricsPanelAlignment: String, CaseIterable, Identifiable {
     }
 }
 
+enum LyricsPanelLayout: String, CaseIterable, Identifiable {
+    case expanded
+    case lyricsOnly = "lyrics-only"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .expanded:
+            return "Expanded"
+        case .lyricsOnly:
+            return "Lyrics Only"
+        }
+    }
+}
+
 struct DynasicSettings: Equatable {
     var lyricsOffset: Double
     var lyricsFontSize: Double
     var lyricsOpacity: Double
     var lyricsAlignment: LyricsPanelAlignment
+    var lyricsPanelLayout: LyricsPanelLayout
     var isClickThrough: Bool
     var isAlwaysOnTop: Bool
+    var isStickyToCorner: Bool
     var showsPreviousLine: Bool
     var showsNextLine: Bool
 
@@ -34,8 +52,10 @@ struct DynasicSettings: Equatable {
         lyricsFontSize: 22,
         lyricsOpacity: 1,
         lyricsAlignment: .center,
+        lyricsPanelLayout: .expanded,
         isClickThrough: false,
         isAlwaysOnTop: true,
+        isStickyToCorner: false,
         showsPreviousLine: true,
         showsNextLine: true
     )
@@ -51,8 +71,10 @@ struct DynasicSettingsStore {
             Key.lyricsFontSize: DynasicSettings.defaults.lyricsFontSize,
             Key.lyricsOpacity: DynasicSettings.defaults.lyricsOpacity,
             Key.lyricsAlignment: DynasicSettings.defaults.lyricsAlignment.rawValue,
+            Key.lyricsPanelLayout: DynasicSettings.defaults.lyricsPanelLayout.rawValue,
             Key.isClickThrough: DynasicSettings.defaults.isClickThrough,
             Key.isAlwaysOnTop: DynasicSettings.defaults.isAlwaysOnTop,
+            Key.isStickyToCorner: DynasicSettings.defaults.isStickyToCorner,
             Key.showsPreviousLine: DynasicSettings.defaults.showsPreviousLine,
             Key.showsNextLine: DynasicSettings.defaults.showsNextLine
         ])
@@ -66,8 +88,12 @@ struct DynasicSettingsStore {
             lyricsAlignment: LyricsPanelAlignment(
                 rawValue: userDefaults.string(forKey: Key.lyricsAlignment) ?? ""
             ) ?? .center,
+            lyricsPanelLayout: LyricsPanelLayout(
+                rawValue: userDefaults.string(forKey: Key.lyricsPanelLayout) ?? ""
+            ) ?? .expanded,
             isClickThrough: userDefaults.bool(forKey: Key.isClickThrough),
             isAlwaysOnTop: userDefaults.bool(forKey: Key.isAlwaysOnTop),
+            isStickyToCorner: userDefaults.bool(forKey: Key.isStickyToCorner),
             showsPreviousLine: userDefaults.bool(forKey: Key.showsPreviousLine),
             showsNextLine: userDefaults.bool(forKey: Key.showsNextLine)
         )
@@ -78,8 +104,10 @@ struct DynasicSettingsStore {
         userDefaults.set(settings.lyricsFontSize, forKey: Key.lyricsFontSize)
         userDefaults.set(settings.lyricsOpacity, forKey: Key.lyricsOpacity)
         userDefaults.set(settings.lyricsAlignment.rawValue, forKey: Key.lyricsAlignment)
+        userDefaults.set(settings.lyricsPanelLayout.rawValue, forKey: Key.lyricsPanelLayout)
         userDefaults.set(settings.isClickThrough, forKey: Key.isClickThrough)
         userDefaults.set(settings.isAlwaysOnTop, forKey: Key.isAlwaysOnTop)
+        userDefaults.set(settings.isStickyToCorner, forKey: Key.isStickyToCorner)
         userDefaults.set(settings.showsPreviousLine, forKey: Key.showsPreviousLine)
         userDefaults.set(settings.showsNextLine, forKey: Key.showsNextLine)
     }
@@ -89,8 +117,10 @@ struct DynasicSettingsStore {
         static let lyricsFontSize = "dynasic.settings.lyricsFontSize"
         static let lyricsOpacity = "dynasic.settings.lyricsOpacity"
         static let lyricsAlignment = "dynasic.settings.lyricsAlignment"
+        static let lyricsPanelLayout = "dynasic.settings.lyricsPanelLayout"
         static let isClickThrough = "dynasic.settings.isClickThrough"
         static let isAlwaysOnTop = "dynasic.settings.isAlwaysOnTop"
+        static let isStickyToCorner = "dynasic.settings.isStickyToCorner"
         static let showsPreviousLine = "dynasic.settings.showsPreviousLine"
         static let showsNextLine = "dynasic.settings.showsNextLine"
     }

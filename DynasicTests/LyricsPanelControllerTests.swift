@@ -34,6 +34,8 @@ final class LyricsPanelControllerTests: XCTestCase {
         let panel = try! XCTUnwrap(controller.panelForTesting)
 
         XCTAssertTrue(panel.styleMask.contains(.borderless))
+        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
         XCTAssertTrue(panel.isFloatingPanel)
         XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
@@ -55,5 +57,100 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertFalse(panel.isFloatingPanel)
         XCTAssertEqual(panel.level, .normal)
         state.hideLyrics()
+    }
+
+    func testPanelPersistsCompleteExpandedFrameAndRestoresItAfterCollapse() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let controller = LyricsPanelController(
+            state: DynasicAppState(userDefaults: defaults),
+            userDefaults: defaults,
+            positionKey: "frame"
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let expectedFrame = NSRect(x: 140, y: 180, width: 520, height: 240)
+        panel.setFrame(expectedFrame, display: false)
+        controller.finishUserMoveForTesting()
+
+        controller.toggleCollapsed()
+        XCTAssertTrue(controller.isCollapsed)
+        XCTAssertEqual(panel.frame.size, LyricsPanelController.collapsedSize)
+        XCTAssertEqual(panel.minSize, LyricsPanelController.collapsedSize)
+        XCTAssertEqual(panel.maxSize, LyricsPanelController.collapsedSize)
+        XCTAssertFalse(panel.ignoresMouseEvents)
+
+        controller.toggleCollapsed()
+        XCTAssertFalse(controller.isCollapsed)
+        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
+        XCTAssertEqual(panel.frame, expectedFrame)
+
+        let values = try XCTUnwrap(defaults.array(forKey: "frame") as? [Double])
+        XCTAssertEqual(values.count, 4)
+        XCTAssertEqual(values[0], expectedFrame.origin.x)
+        XCTAssertEqual(values[1], expectedFrame.origin.y)
+        XCTAssertEqual(values[2], expectedFrame.size.width)
+        XCTAssertEqual(values[3], expectedFrame.size.height)
+    }
+
+    func testSavedExpandedFrameIsKeptInsideAVisibleScreen() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let visible = screen.visibleFrame
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        defaults.set(
+            [visible.maxX - 100, visible.midY, 620, 260],
+            forKey: "frame"
+        )
+        let controller = LyricsPanelController(
+            state: DynasicAppState(userDefaults: defaults),
+            userDefaults: defaults,
+            positionKey: "frame"
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+
+        XCTAssertTrue(NSScreen.screens.contains { $0.visibleFrame.contains(panel.frame) })
+    }
+
+    func testClickThroughIsRestoredOnlyAfterExpanding() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isClickThrough = true
+        let controller = LyricsPanelController(state: state, userDefaults: defaults)
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+
+        controller.toggleCollapsed()
+        XCTAssertFalse(panel.ignoresMouseEvents)
+
+        controller.toggleCollapsed()
+        XCTAssertTrue(panel.ignoresMouseEvents)
+    }
+
+    func testStickyToCornerRunsOnlyWhenUserMoveFinishes() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isStickyToCorner = true
+        let controller = LyricsPanelController(state: state, userDefaults: defaults)
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let freeFrame = NSRect(x: 300, y: 300, width: 280, height: 120)
+        panel.setFrame(freeFrame, display: false)
+        XCTAssertEqual(panel.frame.origin, freeFrame.origin)
+
+        controller.finishUserMoveForTesting()
+        let visibleFrames = NSScreen.screens.map(\.visibleFrame)
+        let isAtCorner = visibleFrames.contains { visible in
+            let frame = panel.frame
+            let xMatches = abs(frame.minX - visible.minX) < 0.5 || abs(frame.maxX - visible.maxX) < 0.5
+            let yMatches = abs(frame.minY - visible.minY) < 0.5 || abs(frame.maxY - visible.maxY) < 0.5
+            return xMatches && yMatches
+        }
+        XCTAssertTrue(isAtCorner)
     }
 }

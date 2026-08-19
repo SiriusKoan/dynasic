@@ -1,10 +1,173 @@
+import Foundation
 import SwiftUI
 import LyricsCore
 
 struct LyricsPanelView: View {
     @ObservedObject var state: DynasicAppState
+    @ObservedObject var controller: LyricsPanelController
 
     var body: some View {
+        Group {
+            if controller.isCollapsed {
+                Button {
+                    controller.toggleCollapsed()
+                } label: {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 22, weight: .semibold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Expand lyrics")
+            } else {
+                regularLayout
+                    .overlay(alignment: .topTrailing) {
+                        Button {
+                            controller.toggleCollapsed()
+                        } label: {
+                            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                .font(.caption.weight(.semibold))
+                                .padding(5)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Collapse lyrics")
+                    }
+                    .padding(16)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .contentShape(Rectangle())
+        .opacity(state.settings.lyricsOpacity)
+    }
+
+    @ViewBuilder
+    private var regularLayout: some View {
+        if state.settings.lyricsPanelLayout == .expanded {
+            expandedLayout
+        } else {
+            lyricsOnlyLayout
+        }
+    }
+
+    private var expandedLayout: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                trackSummary
+
+                Divider()
+                    .frame(maxHeight: .infinity)
+
+                lyricsContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            playbackControls
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var trackSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: "music.note")
+                .font(.system(size: 38, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 96, height: 96)
+                .background(.quaternary)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityLabel("Album artwork unavailable")
+
+            Text(state.trackTitle)
+                .font(.headline)
+                .lineLimit(2)
+
+            Text(state.trackArtist.isEmpty ? "—" : state.trackArtist)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            playbackProgress
+        }
+        .frame(minWidth: 130, idealWidth: 160, maxWidth: 200, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var playbackProgress: some View {
+        if let duration = state.trackDuration, duration > 0 {
+            ProgressView(value: clampedPlaybackPosition, total: duration)
+                .progressViewStyle(.linear)
+
+            HStack {
+                Text(formattedTime(state.estimatedPlaybackPosition))
+                Spacer()
+                Text(formattedTime(duration))
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        } else {
+            ProgressView(value: 0, total: 1)
+                .progressViewStyle(.linear)
+                .opacity(0.35)
+
+            Text("— / —")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var clampedPlaybackPosition: TimeInterval {
+        guard let duration = state.trackDuration, duration > 0 else { return 0 }
+        return min(max(state.estimatedPlaybackPosition ?? 0, 0), duration)
+    }
+
+    private var playbackControls: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 24) {
+                Button {
+                    _ = state.previousTrack()
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                }
+                .accessibilityLabel("Previous track")
+
+                Button {
+                    _ = state.togglePlayPause()
+                } label: {
+                    Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
+                }
+                .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
+
+                Button {
+                    _ = state.nextTrack()
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                }
+                .accessibilityLabel("Next track")
+            }
+            .font(.title3)
+            .buttonStyle(.plain)
+            .disabled(!state.hasCurrentTrack)
+
+            if let error = state.lastPlaybackControlError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var lyricsOnlyLayout: some View {
+        lyricsContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var lyricsContent: some View {
         VStack(alignment: horizontalAlignment, spacing: 6) {
             if let lines = selectedLines {
                 if state.settings.showsPreviousLine, let previous = lines.previous {
@@ -28,12 +191,6 @@ struct LyricsPanelView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .contentShape(Rectangle())
-        .opacity(state.settings.lyricsOpacity)
     }
 
     private var horizontalAlignment: HorizontalAlignment {
@@ -70,5 +227,11 @@ struct LyricsPanelView: View {
             lyrics.lines[currentIndex].text,
             currentIndex + 1 < lyrics.lines.count ? lyrics.lines[currentIndex + 1] : nil
         )
+    }
+
+    private func formattedTime(_ value: TimeInterval?) -> String {
+        guard let value, value.isFinite, value >= 0 else { return "—" }
+        let totalSeconds = Int(value.rounded(.down))
+        return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
 }

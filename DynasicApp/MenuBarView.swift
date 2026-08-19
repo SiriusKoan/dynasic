@@ -77,6 +77,12 @@ struct SettingsView: View {
                     }
                 }
 
+                Picker("Layout", selection: $state.settings.lyricsPanelLayout) {
+                    ForEach(LyricsPanelLayout.allCases) { layout in
+                        Text(layout.title).tag(layout)
+                    }
+                }
+
                 Slider(value: $state.settings.lyricsOffset, in: -5...5, step: 0.05) {
                     Text("Lyrics Offset")
                 }
@@ -86,6 +92,7 @@ struct SettingsView: View {
             Section("Panel") {
                 Toggle("Click-through", isOn: $state.settings.isClickThrough)
                 Toggle("Always on top", isOn: $state.settings.isAlwaysOnTop)
+                Toggle("Sticky to corner", isOn: $state.settings.isStickyToCorner)
                 Toggle("Show previous line", isOn: $state.settings.showsPreviousLine)
                 Toggle("Show next line", isOn: $state.settings.showsNextLine)
             }

@@ -13,6 +13,7 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var lastSnapshotAt: Date?
     @Published private(set) var lastObservationLatency: TimeInterval?
     @Published private(set) var lastObservationError: String?
+    @Published private(set) var lastPlaybackControlError: String?
     @Published var isLyricsVisible = false
     @Published var settings: DynasicSettings {
         didSet {
@@ -29,7 +30,9 @@ final class DynasicAppState: ObservableObject {
     let coordinator: LyricsCoordinator
     private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
+    private let playbackController: any PlaybackControlling
     private let updateScheduler = AppUpdateScheduler()
+    private var playbackCommandGeneration: UInt64 = 0
     private var panelController: LyricsPanelController?
     private var mainWindowController: MainWindowController?
 
@@ -39,9 +42,11 @@ final class DynasicAppState: ObservableObject {
     init(
         userDefaults: UserDefaults = .standard,
         musicBackend: any AppleMusicObservationBackend = AppleMusicObservationService(),
+        playbackController: any PlaybackControlling = AppleMusicPlaybackController(),
         startImmediately: Bool = false
     ) {
         self.musicBackend = musicBackend
+        self.playbackController = playbackController
         let settingsStore = DynasicSettingsStore(userDefaults: userDefaults)
         self.settingsStore = settingsStore
         _settings = Published(initialValue: settingsStore.load())
@@ -112,12 +117,52 @@ final class DynasicAppState: ObservableObject {
         }
     }
 
+    @discardableResult
+    func previousTrack() -> Task<Void, Never> {
+        performPlaybackCommand(.previousTrack)
+    }
+
+    @discardableResult
+    func togglePlayPause() -> Task<Void, Never> {
+        performPlaybackCommand(.playPause)
+    }
+
+    @discardableResult
+    func nextTrack() -> Task<Void, Never> {
+        performPlaybackCommand(.nextTrack)
+    }
+
     private func refreshViewStateNow() async {
         guard musicBackendStatus != "unavailable" else { return }
         let state = await coordinator.currentState()
         let position = await coordinator.currentPosition()
         viewState = state
         estimatedPlaybackPosition = position
+    }
+
+    private func performPlaybackCommand(_ command: PlaybackControlCommand) -> Task<Void, Never> {
+        playbackCommandGeneration &+= 1
+        let commandGeneration = playbackCommandGeneration
+        lastPlaybackControlError = nil
+        let playbackController = self.playbackController
+        return Task { @MainActor [weak self] in
+            do {
+                try await playbackController.perform(command)
+                guard let self, self.playbackCommandGeneration == commandGeneration else { return }
+                self.lastPlaybackControlError = nil
+            } catch let error as PlaybackControlError {
+                guard let self, self.playbackCommandGeneration == commandGeneration else { return }
+                switch error {
+                case .scriptUnavailable:
+                    self.lastPlaybackControlError = "Playback control script unavailable"
+                case let .scriptFailed(message):
+                    self.lastPlaybackControlError = message
+                }
+            } catch {
+                guard let self, self.playbackCommandGeneration == commandGeneration else { return }
+                self.lastPlaybackControlError = String(describing: error)
+            }
+        }
     }
 
     private func observeOnce() async {
@@ -160,6 +205,18 @@ final class DynasicAppState: ObservableObject {
         default:
             return ""
         }
+    }
+
+    var trackDuration: TimeInterval? {
+        diagnosticTrack?.duration
+    }
+
+    var isPlaying: Bool {
+        reportedPlaybackState == .playing
+    }
+
+    var hasCurrentTrack: Bool {
+        diagnosticTrack != nil
     }
 
     var diagnosticsText: String {
@@ -214,8 +271,10 @@ final class DynasicAppState: ObservableObject {
         fontSize: \(settings.lyricsFontSize)
         opacity: \(settings.lyricsOpacity)
         alignment: \(settings.lyricsAlignment.rawValue)
+        layout: \(settings.lyricsPanelLayout.rawValue)
         clickThrough: \(settings.isClickThrough)
         alwaysOnTop: \(settings.isAlwaysOnTop)
+        stickyToCorner: \(settings.isStickyToCorner)
         showPreviousLine: \(settings.showsPreviousLine)
         showNextLine: \(settings.showsNextLine)
 
@@ -228,6 +287,7 @@ final class DynasicAppState: ObservableObject {
         Errors
         ------
         last error: \(diagnosticError)
+        playback control error: \(lastPlaybackControlError ?? "None")
         """
     }
 
