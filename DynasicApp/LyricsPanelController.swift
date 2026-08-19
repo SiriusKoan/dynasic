@@ -229,9 +229,7 @@ final class LyricsPanelController: ObservableObject {
         panel.standardWindowButton(.closeButton)?.isHidden = true
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
-        panel.minSize = Self.minimumExpandedSize
         expandedMaximumSize = Self.maximumExpandedSize
-        panel.maxSize = Self.maximumExpandedSize
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -250,7 +248,11 @@ final class LyricsPanelController: ObservableObject {
             self?.toggleCollapsed()
         }
         self.panel = panel
-        panel.contentView = NSHostingView(rootView: LyricsPanelView(state: state, controller: self))
+        let hostingView = NSHostingView(rootView: LyricsPanelView(state: state, controller: self))
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
+        panel.minSize = Self.minimumExpandedSize
+        panel.maxSize = Self.maximumExpandedSize
 
         if let frame = savedFrame() {
             let visibleFrame = frameConstrainedToVisibleScreen(frame)
@@ -336,6 +338,7 @@ final class LyricsPanelController: ObservableObject {
         saveFrame(panel.frame)
         isCollapsed = true
         panel.isCollapsedForInteraction = true
+        panel.styleMask.remove(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
             x: panel.frame.minX,
@@ -358,6 +361,7 @@ final class LyricsPanelController: ObservableObject {
         let frame = frameConstrainedToVisibleScreen(expandedFrame ?? panel.frame)
         isCollapsed = false
         panel.isCollapsedForInteraction = false
+        panel.styleMask.remove(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
         if let expandedMaximumSize {
             panel.maxSize = expandedMaximumSize
@@ -366,6 +370,7 @@ final class LyricsPanelController: ObservableObject {
         animateFrame(frame, on: panel) { [weak self, weak panel] in
             guard let self, let panel else { return }
             panel.minSize = Self.minimumExpandedSize
+            panel.styleMask.insert(.resizable)
             self.expandedFrame = panel.frame
             self.saveFrame(panel.frame)
             self.isApplyingFrame = false

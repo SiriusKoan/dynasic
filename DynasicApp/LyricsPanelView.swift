@@ -78,7 +78,6 @@ struct LyricsPanelView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
-        .fixedSize(horizontal: false, vertical: true)
         .frame(maxHeight: .infinity, alignment: .center)
     }
 

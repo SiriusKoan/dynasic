@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 
 @testable import dynasic
@@ -39,6 +40,8 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(panel.titleVisibility, .hidden)
         XCTAssertTrue(panel.titlebarAppearsTransparent)
         XCTAssertTrue(panel.standardWindowButton(.closeButton)?.isHidden == true)
+        let hostingView = try! XCTUnwrap(panel.contentView as? NSHostingView<LyricsPanelView>)
+        XCTAssertTrue(hostingView.sizingOptions.isEmpty)
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
         XCTAssertEqual(panel.maxSize, LyricsPanelController.maximumExpandedSize)
         XCTAssertTrue(panel.isFloatingPanel)
@@ -84,12 +87,14 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(panel.frame.size, LyricsPanelController.collapsedSize)
         XCTAssertEqual(panel.minSize, LyricsPanelController.collapsedSize)
         XCTAssertEqual(panel.maxSize, LyricsPanelController.collapsedSize)
+        XCTAssertFalse(panel.styleMask.contains(.resizable))
         XCTAssertFalse(panel.ignoresMouseEvents)
 
         controller.toggleCollapsed()
         XCTAssertFalse(controller.isCollapsed)
         XCTAssertTrue(panel.styleMask.contains(.resizable))
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
+        XCTAssertEqual(panel.maxSize, LyricsPanelController.maximumExpandedSize)
         XCTAssertEqual(panel.frame, expectedFrame)
 
         let values = try XCTUnwrap(defaults.array(forKey: "frame") as? [Double])
@@ -152,7 +157,7 @@ final class LyricsPanelControllerTests: XCTestCase {
 
         controller.toggleCollapsed()
         XCTAssertFalse(panel.ignoresMouseEvents)
-        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertFalse(panel.styleMask.contains(.resizable))
         XCTAssertEqual(panel.minSize, LyricsPanelController.collapsedSize)
         XCTAssertEqual(panel.maxSize, LyricsPanelController.collapsedSize)
 
