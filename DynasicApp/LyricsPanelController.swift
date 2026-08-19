@@ -47,7 +47,7 @@ private final class LyricsPanelWindow: NSPanel {
 
 @MainActor
 final class LyricsPanelController: ObservableObject {
-    static let minimumExpandedSize = NSSize(width: 420, height: 220)
+    static let minimumExpandedSize = NSSize(width: 420, height: 160)
     static let collapsedSize = NSSize(width: 56, height: 56)
 
     private let state: DynasicAppState

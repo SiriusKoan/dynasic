@@ -55,22 +55,29 @@ struct LyricsPanelView: View {
 
     private var expandedLayout: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 16) {
+            Spacer(minLength: 0)
+
+            HStack(alignment: .center, spacing: 16) {
                 trackSummary
 
-                Divider()
-                    .frame(maxHeight: .infinity)
+                Rectangle()
+                    .fill(.separator)
+                    .frame(width: 1, height: 160)
 
                 lyricsContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
 
             Divider()
 
             playbackControls
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxHeight: .infinity, alignment: .center)
     }
 
     private var trackSummary: some View {
