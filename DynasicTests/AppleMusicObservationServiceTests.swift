@@ -14,7 +14,10 @@ final class AppleMusicObservationServiceTests: XCTestCase {
         position=12.5
         persistent-id=123456789
         """)
-        let service = AppleMusicObservationService(scriptRunner: runner)
+        let service = AppleMusicObservationService(
+            scriptRunner: runner,
+            timeSource: SequenceTimeSource(values: [10, 10.3])
+        )
 
         let snapshot = try await service.snapshot()
 
@@ -30,7 +33,7 @@ final class AppleMusicObservationServiceTests: XCTestCase {
                 persistentID: "123456789"
             )
         )
-        XCTAssertGreaterThanOrEqual(snapshot.observationLatency, 0)
+        XCTAssertEqual(snapshot.observationLatency, 0.3, accuracy: 0.0001)
     }
 
     func testTrackErrorProducesSnapshotWithoutTrack() async throws {
@@ -84,6 +87,21 @@ private struct StubScriptRunner: AppleMusicScriptRunner {
 
     func run() throws -> String {
         output
+    }
+}
+
+private final class SequenceTimeSource: MonotonicTimeSource, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [TimeInterval]
+
+    init(values: [TimeInterval]) {
+        self.values = values
+    }
+
+    func now() -> TimeInterval {
+        lock.lock()
+        defer { lock.unlock() }
+        return values.removeFirst()
     }
 }
 

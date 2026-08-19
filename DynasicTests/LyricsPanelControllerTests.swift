@@ -1,4 +1,5 @@
 import AppKit
+import LyricsCore
 import SwiftUI
 import XCTest
 
@@ -34,13 +35,15 @@ final class LyricsPanelControllerTests: XCTestCase {
         controller.show()
         let panel = try! XCTUnwrap(controller.panelForTesting)
 
-        XCTAssertTrue(panel.styleMask.contains(.borderless))
-        XCTAssertFalse(panel.styleMask.contains(.titled))
-        XCTAssertFalse(panel.styleMask.contains(.fullSizeContentView))
+        XCTAssertTrue(panel.styleMask.contains(.titled))
+        XCTAssertTrue(panel.styleMask.contains(.fullSizeContentView))
         XCTAssertTrue(panel.styleMask.contains(.resizable))
-        XCTAssertNil(panel.standardWindowButton(.closeButton))
-        XCTAssertNil(panel.standardWindowButton(.miniaturizeButton))
-        XCTAssertNil(panel.standardWindowButton(.zoomButton))
+        XCTAssertEqual(panel.titleVisibility, .hidden)
+        XCTAssertTrue(panel.titlebarAppearsTransparent)
+        XCTAssertEqual(panel.titlebarSeparatorStyle, .none)
+        XCTAssertTrue(panel.standardWindowButton(.closeButton)?.isHidden == true)
+        XCTAssertTrue(panel.standardWindowButton(.miniaturizeButton)?.isHidden == true)
+        XCTAssertTrue(panel.standardWindowButton(.zoomButton)?.isHidden == true)
         let hostingView = try! XCTUnwrap(panel.contentView as? NSHostingView<LyricsPanelView>)
         XCTAssertTrue(hostingView.sizingOptions.isEmpty)
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
@@ -204,27 +207,110 @@ final class LyricsPanelControllerTests: XCTestCase {
         )
     }
 
-    func testStickyToCornerRunsOnlyWhenUserMoveFinishes() throws {
+    func testStickyToEdgeAnchorRunsOnlyWhenUserMoveFinishes() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
         state.settings.isStickyToCorner = true
-        let controller = LyricsPanelController(state: state, userDefaults: defaults)
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
 
         controller.show()
         let panel = try XCTUnwrap(controller.panelForTesting)
-        let freeFrame = NSRect(x: 300, y: 300, width: 280, height: 120)
+        let screen = try XCTUnwrap(NSScreen.main)
+        let visible = screen.visibleFrame
+        let freeFrame = NSRect(
+            x: visible.midX - 240,
+            y: visible.maxY - 210,
+            width: 480,
+            height: 180
+        )
         panel.setFrame(freeFrame, display: false)
         XCTAssertEqual(panel.frame.origin, freeFrame.origin)
 
         controller.finishUserMoveForTesting()
-        let visibleFrames = NSScreen.screens.map(\.visibleFrame)
-        let isAtCorner = visibleFrames.contains { visible in
-            let frame = panel.frame
-            let xMatches = abs(frame.minX - visible.minX) < 0.5 || abs(frame.maxX - visible.maxX) < 0.5
-            let yMatches = abs(frame.minY - visible.minY) < 0.5 || abs(frame.maxY - visible.maxY) < 0.5
-            return xMatches && yMatches
-        }
-        XCTAssertTrue(isAtCorner)
+        XCTAssertEqual(panel.frame.midX, visible.midX, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.maxY, visible.maxY, accuracy: 0.5)
+    }
+
+    func testEdgeAnchorFramesIncludeFourCornersAndFourEdgeMidpoints() {
+        let visible = NSRect(x: 100, y: 200, width: 1_000, height: 800)
+        let frame = NSRect(x: 0, y: 0, width: 200, height: 100)
+
+        let origins = LyricsPanelController.edgeAnchorFrames(for: frame, in: visible)
+            .map(\.origin)
+
+        XCTAssertEqual(
+            origins,
+            [
+                NSPoint(x: 100, y: 200),
+                NSPoint(x: 500, y: 200),
+                NSPoint(x: 900, y: 200),
+                NSPoint(x: 100, y: 550),
+                NSPoint(x: 900, y: 550),
+                NSPoint(x: 100, y: 900),
+                NSPoint(x: 500, y: 900),
+                NSPoint(x: 900, y: 900)
+            ]
+        )
+    }
+
+    func testLyricsPresentationIdentityChangesOncePerDisplayedLine() throws {
+        let track = TrackMetadata(
+            title: "Track",
+            artist: "Artist",
+            persistentID: "track-1"
+        )
+        let lyrics = Lyrics(lines: [
+            LyricLine(timestamp: 0, text: "Previous"),
+            LyricLine(timestamp: 10, text: "Current"),
+            LyricLine(timestamp: 20, text: "Next")
+        ])
+
+        let current = try XCTUnwrap(
+            LyricsLinePresentation(
+                viewState: .displaying(track: track, lyrics: lyrics, currentIndex: 1)
+            )
+        )
+        let unchanged = try XCTUnwrap(
+            LyricsLinePresentation(
+                viewState: .displaying(track: track, lyrics: lyrics, currentIndex: 1)
+            )
+        )
+        let advanced = try XCTUnwrap(
+            LyricsLinePresentation(
+                viewState: .displaying(track: track, lyrics: lyrics, currentIndex: 2)
+            )
+        )
+        let nextTrack = try XCTUnwrap(
+            LyricsLinePresentation(
+                viewState: .displaying(
+                    track: TrackMetadata(
+                        title: "Track 2",
+                        artist: "Artist",
+                        persistentID: "track-2"
+                    ),
+                    lyrics: lyrics,
+                    currentIndex: 1
+                )
+            )
+        )
+
+        XCTAssertEqual(current.id, unchanged.id)
+        XCTAssertNotEqual(current.id, advanced.id)
+        XCTAssertNotEqual(current.id, nextTrack.id)
+        XCTAssertEqual(current.lines.map(\.line.text), ["Previous", "Current", "Next"])
+
+        let currentLines = current.visibleLines(showsPrevious: true, showsNext: true)
+        let advancedLines = advanced.visibleLines(showsPrevious: true, showsNext: true)
+        XCTAssertEqual(Set(currentLines.map(\.id)).count, currentLines.count)
+        XCTAssertEqual(
+            Set(currentLines.map(\.id)).intersection(Set(advancedLines.map(\.id))).count,
+            2
+        )
+        XCTAssertEqual(currentLines.map(\.role), [.previous, .current, .next])
     }
 
     private func mouseEvent(

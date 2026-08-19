@@ -146,10 +146,9 @@ final class DynasicAppState: ObservableObject {
 
     private func refreshViewStateNow() async {
         guard musicBackendStatus != "unavailable" else { return }
-        let state = await coordinator.currentState()
-        let position = await coordinator.currentPosition()
-        viewState = state
-        estimatedPlaybackPosition = position
+        let display = await coordinator.currentDisplay()
+        viewState = display.state
+        estimatedPlaybackPosition = display.position
     }
 
     private func performPlaybackCommand(_ command: PlaybackControlCommand) -> Task<Void, Never> {

@@ -82,6 +82,7 @@ func missingPositionRemainsUnavailable() {
     let fakeClock = FakeClock()
     var playbackClock = PlaybackClock(timeSource: fakeClock)
 
+    playbackClock.synchronize(position: 10, state: .playing)
     playbackClock.synchronize(position: nil, state: .playing)
 
     #expect(playbackClock.currentPosition() == nil)

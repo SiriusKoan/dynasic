@@ -37,7 +37,7 @@ public actor LyricsCoordinator {
 
     public func process(snapshot: PlaybackSnapshot) async {
         playbackClock.synchronize(
-            position: snapshot.position,
+            position: snapshot.track == nil ? nil : snapshot.position,
             state: snapshot.state,
             observationLatency: snapshot.observationLatency
         )
@@ -53,13 +53,18 @@ public actor LyricsCoordinator {
             await startTrack(track, identity: identity)
         } else {
             activeTrack = track
-            refreshDisplayedState()
+            refreshDisplayedState(position: playbackClock.currentPosition())
         }
     }
 
     public func currentState() -> LyricsViewState {
-        refreshDisplayedState()
-        return state
+        currentDisplay().state
+    }
+
+    public func currentDisplay() -> (state: LyricsViewState, position: TimeInterval?) {
+        let position = playbackClock.currentPosition()
+        refreshDisplayedState(position: position)
+        return (state, position)
     }
 
     public func currentPosition() -> TimeInterval? {
@@ -82,7 +87,11 @@ public actor LyricsCoordinator {
 
         if let cachedLyrics = await cache.load(for: track) {
             guard isCurrent(identity: identity, generation: requestGeneration) else { return }
-            state = displayingState(track: track, lyrics: cachedLyrics)
+            state = displayingState(
+                track: track,
+                lyrics: cachedLyrics,
+                position: playbackClock.currentPosition()
+            )
             return
         }
 
@@ -126,7 +135,11 @@ public actor LyricsCoordinator {
             return
         }
 
-        state = displayingState(track: track, lyrics: lyrics)
+        state = displayingState(
+            track: track,
+            lyrics: lyrics,
+            position: playbackClock.currentPosition()
+        )
         _ = await cache.store(lyrics, for: track)
     }
 
@@ -136,16 +149,20 @@ public actor LyricsCoordinator {
         state = .error(.providerFailed)
     }
 
-    private func refreshDisplayedState() {
+    private func refreshDisplayedState(position: TimeInterval?) {
         guard case let .displaying(_, lyrics, _) = state,
               let activeTrack else {
             return
         }
-        state = displayingState(track: activeTrack, lyrics: lyrics)
+        state = displayingState(track: activeTrack, lyrics: lyrics, position: position)
     }
 
-    private func displayingState(track: TrackMetadata, lyrics: Lyrics) -> LyricsViewState {
-        let currentIndex = playbackClock.currentPosition().map {
+    private func displayingState(
+        track: TrackMetadata,
+        lyrics: Lyrics,
+        position: TimeInterval?
+    ) -> LyricsViewState {
+        let currentIndex = position.map {
             LyricSelector.select(lyrics: lyrics, position: $0).currentIndex
         } ?? nil
         return .displaying(

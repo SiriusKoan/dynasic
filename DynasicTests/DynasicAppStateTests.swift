@@ -110,6 +110,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(state.musicBackendStatus, "connected")
         XCTAssertEqual(state.reportedPlaybackState, .paused)
         XCTAssertEqual(state.reportedPlaybackPosition, 4.5)
+        XCTAssertNil(state.estimatedPlaybackPosition)
         XCTAssertEqual(state.viewState, .nothingPlaying)
     }
 

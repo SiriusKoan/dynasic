@@ -40,13 +40,16 @@ public struct PlaybackClock: Sendable {
         state: PlaybackState,
         observationLatency: TimeInterval = 0
     ) {
-        if let position, position.isFinite, position >= 0 {
-            reportedPosition = position
-            let now = timeSource.now()
-            let latency = observationLatency.isFinite ? max(0, observationLatency) : 0
-            observedMonotonicTime = now - latency
-        }
         playbackState = state
+        guard let position, position.isFinite, position >= 0 else {
+            reportedPosition = nil
+            observedMonotonicTime = nil
+            return
+        }
+
+        reportedPosition = position
+        let latency = observationLatency.isFinite ? max(0, observationLatency) : 0
+        observedMonotonicTime = timeSource.now() - latency
     }
 
     public func currentPosition() -> TimeInterval? {

@@ -198,28 +198,55 @@ struct LyricsPanelView: View {
 
     @ViewBuilder
     private var lyricsContent: some View {
+        if let lines = selectedLines {
+            lyricsStack(lines)
+        } else {
+            Text("No lyrics")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func lyricsStack(_ lines: LyricsLinePresentation) -> some View {
         VStack(alignment: horizontalAlignment, spacing: 6) {
-            if let lines = selectedLines {
-                if state.settings.showsPreviousLine, let previous = lines.previous {
-                    Text(previous.text)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(nil)
-                }
-
-                Text(lines.current)
-                    .font(.system(size: state.settings.lyricsFontSize, weight: .semibold))
-                    .lineLimit(nil)
-                    .multilineTextAlignment(textAlignment)
-
-                if state.settings.showsNextLine, let next = lines.next {
-                    Text(next.text)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(nil)
-                }
-            } else {
-                Text("No lyrics")
-                    .foregroundStyle(.secondary)
+            ForEach(
+                lines.visibleLines(
+                    showsPrevious: state.settings.showsPreviousLine,
+                    showsNext: state.settings.showsNextLine
+                )
+            ) { item in
+                lyricText(item)
+                    .transition(transition(for: item.role))
             }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment)
+        .animation(.easeInOut(duration: 0.24), value: lines.id)
+    }
+
+    @ViewBuilder
+    private func lyricText(_ item: LyricsLinePresentation.VisibleLine) -> some View {
+        if item.role == .current {
+            Text(item.line.text)
+                .font(.system(size: state.settings.lyricsFontSize, weight: .semibold))
+                .lineLimit(nil)
+                .multilineTextAlignment(textAlignment)
+                .frame(maxWidth: .infinity, alignment: alignment)
+        } else {
+            Text(item.line.text)
+                .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .multilineTextAlignment(textAlignment)
+                .frame(maxWidth: .infinity, alignment: alignment)
+        }
+    }
+
+    private func transition(for role: LyricsLinePresentation.Role) -> AnyTransition {
+        switch role {
+        case .previous:
+            return .move(edge: .top).combined(with: .opacity)
+        case .current:
+            return .opacity
+        case .next:
+            return .move(edge: .bottom).combined(with: .opacity)
         }
     }
 
@@ -245,23 +272,91 @@ struct LyricsPanelView: View {
         }
     }
 
-    private var selectedLines: (previous: LyricLine?, current: String, next: LyricLine?)? {
-        guard case let .displaying(_, lyrics, currentIndex) = state.viewState,
-              let currentIndex,
-              lyrics.lines.indices.contains(currentIndex) else {
-            return nil
+    private var alignment: Alignment {
+        switch state.settings.lyricsAlignment {
+        case .leading:
+            return .leading
+        case .center:
+            return .center
+        case .trailing:
+            return .trailing
         }
+    }
 
-        return (
-            currentIndex > 0 ? lyrics.lines[currentIndex - 1] : nil,
-            lyrics.lines[currentIndex].text,
-            currentIndex + 1 < lyrics.lines.count ? lyrics.lines[currentIndex + 1] : nil
-        )
+    private var selectedLines: LyricsLinePresentation? {
+        LyricsLinePresentation(viewState: state.viewState)
     }
 
     private func formattedTime(_ value: TimeInterval?) -> String {
         guard let value, value.isFinite, value >= 0 else { return "—" }
         let totalSeconds = Int(value.rounded(.down))
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
+struct LyricsLinePresentation: Equatable, Identifiable {
+    struct ID: Equatable, Hashable {
+        let track: TrackIdentity
+        let currentIndex: Int
+    }
+
+    enum Role: Equatable {
+        case previous
+        case current
+        case next
+    }
+
+    struct VisibleLine: Equatable, Identifiable {
+        struct ID: Equatable, Hashable {
+            let track: TrackIdentity
+            let lineIndex: Int
+        }
+
+        let id: ID
+        let line: LyricLine
+        let role: Role
+    }
+
+    let id: ID
+    let lines: [VisibleLine]
+
+    init?(viewState: LyricsViewState) {
+        guard case let .displaying(track, lyrics, currentIndex) = viewState,
+              let currentIndex,
+              lyrics.lines.indices.contains(currentIndex) else {
+            return nil
+        }
+
+        let trackIdentity = TrackIdentity(metadata: track)
+        id = ID(track: trackIdentity, currentIndex: currentIndex)
+        let lowerBound = max(lyrics.lines.startIndex, currentIndex - 1)
+        let upperBound = min(lyrics.lines.index(before: lyrics.lines.endIndex), currentIndex + 1)
+        lines = (lowerBound...upperBound).map { index in
+            let role: Role = if index < currentIndex {
+                .previous
+            } else if index > currentIndex {
+                .next
+            } else {
+                .current
+            }
+            return VisibleLine(
+                id: VisibleLine.ID(track: trackIdentity, lineIndex: index),
+                line: lyrics.lines[index],
+                role: role
+            )
+        }
+    }
+
+    func visibleLines(showsPrevious: Bool, showsNext: Bool) -> [VisibleLine] {
+        lines.filter { line in
+            switch line.role {
+            case .previous:
+                showsPrevious
+            case .current:
+                true
+            case .next:
+                showsNext
+            }
+        }
     }
 }

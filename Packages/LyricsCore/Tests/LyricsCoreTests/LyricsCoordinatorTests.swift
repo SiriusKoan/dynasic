@@ -254,12 +254,13 @@ func coordinatorRefreshesLyricSelectionFromLocalClock() async throws {
 
     fakeClock.advance(by: 10)
 
-    #expect(await waitUntil {
-        if case let .displaying(_, _, currentIndex) = await coordinator.currentState() {
-            return currentIndex == 1
-        }
-        return false
-    })
+    let display = await coordinator.currentDisplay()
+    #expect(display.position == 20)
+    if case let .displaying(_, _, currentIndex) = display.state {
+        #expect(currentIndex == 1)
+    } else {
+        Issue.record("Expected displaying state")
+    }
 }
 
 @Test

@@ -59,24 +59,23 @@ struct SystemAppleMusicScriptRunner: AppleMusicScriptRunner {
 
 struct AppleMusicObservationService: AppleMusicObservationBackend, Sendable {
     private let scriptRunner: any AppleMusicScriptRunner
+    private let timeSource: any MonotonicTimeSource
 
-    init(scriptRunner: any AppleMusicScriptRunner = SystemAppleMusicScriptRunner()) {
+    init(
+        scriptRunner: any AppleMusicScriptRunner = SystemAppleMusicScriptRunner(),
+        timeSource: any MonotonicTimeSource = ContinuousClockTimeSource()
+    ) {
         self.scriptRunner = scriptRunner
+        self.timeSource = timeSource
     }
 
     func snapshot() async throws -> PlaybackSnapshot {
         let scriptRunner = self.scriptRunner
-        let clock = ContinuousClock()
-        let startedAt = clock.now
+        let startedAt = timeSource.now()
         let output = try await Task.detached(priority: .utility) {
             try scriptRunner.run()
         }.value
-        let finishedAt = clock.now
-        let duration = startedAt.duration(to: finishedAt).components
-        let observationLatency = max(
-            0,
-            Double(duration.seconds) + Double(duration.attoseconds) / 1_000_000_000_000_000_000
-        )
+        let observationLatency = max(0, timeSource.now() - startedAt)
         return try Self.parse(output, observationLatency: observationLatency)
     }
 

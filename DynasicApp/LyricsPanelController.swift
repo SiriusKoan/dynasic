@@ -90,6 +90,12 @@ private final class LyricsPanelWindow: NSPanel {
 
 @MainActor
 final class LyricsPanelController: ObservableObject {
+    private enum FrameMutationState: Equatable {
+        case idle
+        case applying
+        case animating
+    }
+
     static let minimumExpandedSize = NSSize(width: 420, height: 120)
     static let maximumExpandedSize = NSSize(width: 10_000, height: 360)
     static let collapsedSize = NSSize(width: 40, height: 40)
@@ -102,10 +108,8 @@ final class LyricsPanelController: ObservableObject {
     private var panel: LyricsPanelWindow?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
-    private var isApplyingFrame = false
-    private var isAnimatingFrame = false
+    private var frameMutationState = FrameMutationState.idle
     private var expandedFrame: NSRect?
-    private var expandedMaximumSize: NSSize?
     private var collapsedFrameOrigin: NSPoint?
 
     @Published private(set) var isCollapsed = false
@@ -136,7 +140,7 @@ final class LyricsPanelController: ObservableObject {
     func show() {
         let panel = makePanelIfNeeded()
         panel.orderFrontRegardless()
-        guard !isCollapsed else { return }
+        guard !isCollapsed, frameMutationState != .animating else { return }
 
         let visibleFrame = frameConstrainedToVisibleScreen(panel.frame)
         applyFrame(visibleFrame, to: panel)
@@ -175,7 +179,7 @@ final class LyricsPanelController: ObservableObject {
     }
 
     func toggleCollapsed() {
-        guard !isAnimatingFrame else { return }
+        guard frameMutationState != .animating else { return }
         if isCollapsed {
             expand()
         } else {
@@ -192,15 +196,20 @@ final class LyricsPanelController: ObservableObject {
 
         let panel = LyricsPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 260),
-            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
         )
-        expandedMaximumSize = Self.maximumExpandedSize
+        panel.title = ""
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.titlebarSeparatorStyle = .none
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.isFloatingPanel = true
         panel.isMovable = true
         panel.level = state.settings.isAlwaysOnTop ? .floating : .normal
         panel.ignoresMouseEvents = state.settings.isClickThrough
@@ -287,7 +296,7 @@ final class LyricsPanelController: ObservableObject {
     }
 
     private func recordFrameChange(_ window: NSWindow) {
-        guard !isApplyingFrame else { return }
+        guard frameMutationState == .idle else { return }
         if isCollapsed {
             recordCollapsedFrameChange(window.frame)
             return
@@ -337,11 +346,10 @@ final class LyricsPanelController: ObservableObject {
         )
         collapsedFrameOrigin = collapsedFrame.origin
         panel.ignoresMouseEvents = false
-        animateFrame(collapsedFrame, on: panel) { [weak self, weak panel] in
-            guard let self, let panel else { return }
+        animateFrame(collapsedFrame, on: panel) { [weak panel] in
+            guard let panel else { return }
             panel.minSize = Self.collapsedSize
             panel.maxSize = Self.collapsedSize
-            self.isApplyingFrame = false
         }
     }
 
@@ -353,26 +361,22 @@ final class LyricsPanelController: ObservableObject {
         collapsedFrameOrigin = nil
         panel.isCollapsedForInteraction = false
         panel.isMovableByWindowBackground = true
-        panel.styleMask.remove(.resizable)
+        panel.styleMask.insert(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
-        if let expandedMaximumSize {
-            panel.maxSize = expandedMaximumSize
-        }
+        panel.maxSize = Self.maximumExpandedSize
         panel.ignoresMouseEvents = state.settings.isClickThrough
         animateFrame(frame, on: panel) { [weak self, weak panel] in
             guard let self, let panel else { return }
             panel.minSize = Self.minimumExpandedSize
-            panel.styleMask.insert(.resizable)
             self.expandedFrame = panel.frame
             self.saveFrame(panel.frame)
-            self.isApplyingFrame = false
         }
     }
 
     private func applyFrame(_ frame: NSRect, to panel: NSWindow) {
-        isApplyingFrame = true
+        frameMutationState = .applying
         panel.setFrame(frame, display: false, animate: false)
-        isApplyingFrame = false
+        frameMutationState = .idle
     }
 
     private func animateFrame(
@@ -380,11 +384,10 @@ final class LyricsPanelController: ObservableObject {
         on panel: NSWindow,
         completion: @escaping @MainActor () -> Void
     ) {
-        isApplyingFrame = true
-        isAnimatingFrame = true
+        frameMutationState = .animating
         guard animationDuration > 0 else {
             panel.setFrame(frame, display: false, animate: false)
-            isAnimatingFrame = false
+            frameMutationState = .idle
             completion()
             return
         }
@@ -395,46 +398,75 @@ final class LyricsPanelController: ObservableObject {
             panel.animator().setFrame(frame, display: true)
         } completionHandler: {
             MainActor.assumeIsolated {
-                self.isAnimatingFrame = false
+                self.frameMutationState = .idle
                 completion()
             }
         }
     }
 
     private func finishUserMove() {
-        guard let panel else { return }
+        guard let panel, frameMutationState == .idle else { return }
 
-        if state.settings.isStickyToCorner {
-            applyFrame(nearestCornerFrame(for: panel.frame), to: panel)
+        guard state.settings.isStickyToCorner else {
+            recordFinishedFrame(panel.frame)
+            return
         }
 
-        if isCollapsed {
-            recordCollapsedFrameChange(panel.frame)
-        } else {
-            expandedFrame = panel.frame
-            saveFrame(panel.frame)
+        let targetFrame = nearestEdgeAnchorFrame(for: panel.frame)
+        guard targetFrame != panel.frame else {
+            recordFinishedFrame(panel.frame)
+            return
+        }
+
+        animateFrame(targetFrame, on: panel) { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            self.recordFinishedFrame(panel.frame)
         }
     }
 
-    private func nearestCornerFrame(for frame: NSRect) -> NSRect {
+    private func recordFinishedFrame(_ frame: NSRect) {
+        if isCollapsed {
+            recordCollapsedFrameChange(frame)
+        } else {
+            expandedFrame = frame
+            saveFrame(frame)
+        }
+    }
+
+    private func nearestEdgeAnchorFrame(for frame: NSRect) -> NSRect {
         let candidates = NSScreen.screens.flatMap { screen -> [NSRect] in
-            let visible = screen.visibleFrame
-            let width = min(frame.width, visible.width)
-            let height = min(frame.height, visible.height)
-            let maxX = visible.maxX - width
-            let maxY = visible.maxY - height
-            return [
-                NSRect(x: visible.minX, y: visible.minY, width: width, height: height),
-                NSRect(x: maxX, y: visible.minY, width: width, height: height),
-                NSRect(x: visible.minX, y: maxY, width: width, height: height),
-                NSRect(x: maxX, y: maxY, width: width, height: height)
-            ]
+            Self.edgeAnchorFrames(for: frame, in: screen.visibleFrame)
         }
 
-        guard let nearest = candidates.min(by: { distanceSquared(from: frame.origin, to: $0.origin) < distanceSquared(from: frame.origin, to: $1.origin) }) else {
+        guard let nearest = candidates.min(by: {
+            distanceSquared(from: frame.center, to: $0.center)
+                < distanceSquared(from: frame.center, to: $1.center)
+        }) else {
             return frame
         }
         return nearest
+    }
+
+    static func edgeAnchorFrames(for frame: NSRect, in visibleFrame: NSRect) -> [NSRect] {
+        let width = min(frame.width, visibleFrame.width)
+        let height = min(frame.height, visibleFrame.height)
+        let minX = visibleFrame.minX
+        let midX = visibleFrame.midX - width / 2
+        let maxX = visibleFrame.maxX - width
+        let minY = visibleFrame.minY
+        let midY = visibleFrame.midY - height / 2
+        let maxY = visibleFrame.maxY - height
+
+        return [
+            NSRect(x: minX, y: minY, width: width, height: height),
+            NSRect(x: midX, y: minY, width: width, height: height),
+            NSRect(x: maxX, y: minY, width: width, height: height),
+            NSRect(x: minX, y: midY, width: width, height: height),
+            NSRect(x: maxX, y: midY, width: width, height: height),
+            NSRect(x: minX, y: maxY, width: width, height: height),
+            NSRect(x: midX, y: maxY, width: width, height: height),
+            NSRect(x: maxX, y: maxY, width: width, height: height)
+        ]
     }
 
     private func frameConstrainedToVisibleScreen(_ frame: NSRect) -> NSRect {
