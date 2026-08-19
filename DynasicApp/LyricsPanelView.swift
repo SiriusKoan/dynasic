@@ -13,10 +13,13 @@ struct LyricsPanelView: View {
                 Button {
                     controller.toggleCollapsed()
                 } label: {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    GeometryReader { proxy in
+                        Image("DynasicCollapsedIcon")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .clipped()
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Expand lyrics")
