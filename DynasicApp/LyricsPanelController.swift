@@ -44,7 +44,25 @@ private final class LyricsPanelWindow: NSPanel {
                 didMoveCollapsedPanel = true
                 return
             case .leftMouseUp:
-                let didMove = didMoveCollapsedPanel
+                var didMove = didMoveCollapsedPanel
+                if !didMove,
+                   let collapsedPointerDownLocation,
+                   let collapsedPointerDownOrigin {
+                    let currentLocation = convertPoint(toScreen: event.locationInWindow)
+                    let delta = NSPoint(
+                        x: currentLocation.x - collapsedPointerDownLocation.x,
+                        y: currentLocation.y - collapsedPointerDownLocation.y
+                    )
+                    if abs(delta.x) > 0.5 || abs(delta.y) > 0.5 {
+                        setFrameOrigin(
+                            NSPoint(
+                                x: collapsedPointerDownOrigin.x + delta.x,
+                                y: collapsedPointerDownOrigin.y + delta.y
+                            )
+                        )
+                        didMove = true
+                    }
+                }
                 pointerDownFrame = nil
                 collapsedPointerDownLocation = nil
                 collapsedPointerDownOrigin = nil
