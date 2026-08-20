@@ -26,15 +26,27 @@ struct LyricsPanelView: View {
             } else {
                 regularLayout
                     .overlay(alignment: .topTrailing) {
-                        Button {
-                            controller.toggleCollapsed()
-                        } label: {
-                            Image(systemName: "arrow.down.right.and.arrow.up.left")
-                                .font(.caption.weight(.semibold))
-                                .padding(5)
+                        HStack(spacing: 2) {
+                            Button {
+                                controller.rotateContent()
+                            } label: {
+                                Image(systemName: "rotate.right")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(5)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Rotate layout")
+
+                            Button {
+                                controller.toggleCollapsed()
+                            } label: {
+                                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(5)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Collapse lyrics")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Collapse lyrics")
                     }
                     .padding(16)
             }
@@ -60,12 +72,10 @@ struct LyricsPanelView: View {
         VStack(spacing: 12) {
             Spacer(minLength: 0)
 
-            HStack(alignment: .center, spacing: 16) {
+            expandedContentLayout {
                 trackSummary
 
-                Rectangle()
-                    .fill(.separator)
-                    .frame(width: 1, height: 72)
+                trackLyricsDivider
 
                 lyricsContent
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -76,6 +86,28 @@ struct LyricsPanelView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(maxHeight: .infinity, alignment: .center)
+        .animation(.easeInOut(duration: 0.24), value: controller.contentOrientation)
+    }
+
+    private var expandedContentLayout: AnyLayout {
+        switch controller.contentOrientation {
+        case .horizontal:
+            return AnyLayout(HStackLayout(alignment: .center, spacing: 16))
+        case .vertical:
+            return AnyLayout(VStackLayout(alignment: .center, spacing: 12))
+        }
+    }
+
+    @ViewBuilder
+    private var trackLyricsDivider: some View {
+        switch controller.contentOrientation {
+        case .horizontal:
+            Rectangle()
+                .fill(.separator)
+                .frame(width: 1, height: 72)
+        case .vertical:
+            Divider()
+        }
     }
 
     private var trackSummary: some View {
@@ -166,12 +198,7 @@ struct LyricsPanelView: View {
 
     private func lyricsStack(_ lines: LyricsLinePresentation) -> some View {
         VStack(alignment: horizontalAlignment, spacing: 6) {
-            ForEach(
-                lines.visibleLines(
-                    showsPrevious: state.settings.showsPreviousLine,
-                    showsNext: state.settings.showsNextLine
-                )
-            ) { item in
+            ForEach(lines.lines) { item in
                 lyricText(item)
                     .transition(transition(for: item.role))
             }
@@ -302,19 +329,6 @@ struct LyricsLinePresentation: Equatable, Identifiable {
                 line: lyrics.lines[index],
                 role: role
             )
-        }
-    }
-
-    func visibleLines(showsPrevious: Bool, showsNext: Bool) -> [VisibleLine] {
-        lines.filter { line in
-            switch line.role {
-            case .previous:
-                showsPrevious
-            case .current:
-                true
-            case .next:
-                showsNext
-            }
         }
     }
 }

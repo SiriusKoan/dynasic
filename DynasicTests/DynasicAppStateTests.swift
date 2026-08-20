@@ -12,6 +12,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertFalse(state.isLyricsVisible)
         XCTAssertEqual(state.settings.lyricsOffset, 0)
         XCTAssertEqual(state.settings.lyricsPanelLayout, .expanded)
+        XCTAssertTrue(state.settings.isAutoRotateEnabled)
         XCTAssertEqual(state.trackTitle, "Nothing Playing")
     }
 
@@ -57,8 +58,7 @@ final class DynasicAppStateTests: XCTestCase {
         firstState.settings.isClickThrough = true
         firstState.settings.isAlwaysOnTop = false
         firstState.settings.isStickyToCorner = true
-        firstState.settings.showsPreviousLine = false
-        firstState.settings.showsNextLine = false
+        firstState.settings.isAutoRotateEnabled = false
 
         let secondState = DynasicAppState(userDefaults: defaults)
 
@@ -70,8 +70,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertTrue(secondState.settings.isClickThrough)
         XCTAssertFalse(secondState.settings.isAlwaysOnTop)
         XCTAssertTrue(secondState.settings.isStickyToCorner)
-        XCTAssertFalse(secondState.settings.showsPreviousLine)
-        XCTAssertFalse(secondState.settings.showsNextLine)
+        XCTAssertFalse(secondState.settings.isAutoRotateEnabled)
     }
 
     func testDiagnosticsTextContainsStableSections() {

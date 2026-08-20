@@ -44,8 +44,7 @@ struct DynasicSettings: Equatable {
     var isClickThrough: Bool
     var isAlwaysOnTop: Bool
     var isStickyToCorner: Bool
-    var showsPreviousLine: Bool
-    var showsNextLine: Bool
+    var isAutoRotateEnabled: Bool
 
     static let defaults = DynasicSettings(
         lyricsOffset: 0,
@@ -56,8 +55,7 @@ struct DynasicSettings: Equatable {
         isClickThrough: false,
         isAlwaysOnTop: true,
         isStickyToCorner: false,
-        showsPreviousLine: true,
-        showsNextLine: true
+        isAutoRotateEnabled: true
     )
 }
 
@@ -75,8 +73,7 @@ struct DynasicSettingsStore {
             Key.isClickThrough: DynasicSettings.defaults.isClickThrough,
             Key.isAlwaysOnTop: DynasicSettings.defaults.isAlwaysOnTop,
             Key.isStickyToCorner: DynasicSettings.defaults.isStickyToCorner,
-            Key.showsPreviousLine: DynasicSettings.defaults.showsPreviousLine,
-            Key.showsNextLine: DynasicSettings.defaults.showsNextLine
+            Key.isAutoRotateEnabled: DynasicSettings.defaults.isAutoRotateEnabled
         ])
     }
 
@@ -94,8 +91,7 @@ struct DynasicSettingsStore {
             isClickThrough: userDefaults.bool(forKey: Key.isClickThrough),
             isAlwaysOnTop: userDefaults.bool(forKey: Key.isAlwaysOnTop),
             isStickyToCorner: userDefaults.bool(forKey: Key.isStickyToCorner),
-            showsPreviousLine: userDefaults.bool(forKey: Key.showsPreviousLine),
-            showsNextLine: userDefaults.bool(forKey: Key.showsNextLine)
+            isAutoRotateEnabled: userDefaults.bool(forKey: Key.isAutoRotateEnabled)
         )
     }
 
@@ -108,8 +104,7 @@ struct DynasicSettingsStore {
         userDefaults.set(settings.isClickThrough, forKey: Key.isClickThrough)
         userDefaults.set(settings.isAlwaysOnTop, forKey: Key.isAlwaysOnTop)
         userDefaults.set(settings.isStickyToCorner, forKey: Key.isStickyToCorner)
-        userDefaults.set(settings.showsPreviousLine, forKey: Key.showsPreviousLine)
-        userDefaults.set(settings.showsNextLine, forKey: Key.showsNextLine)
+        userDefaults.set(settings.isAutoRotateEnabled, forKey: Key.isAutoRotateEnabled)
     }
 
     private enum Key {
@@ -121,7 +116,6 @@ struct DynasicSettingsStore {
         static let isClickThrough = "dynasic.settings.isClickThrough"
         static let isAlwaysOnTop = "dynasic.settings.isAlwaysOnTop"
         static let isStickyToCorner = "dynasic.settings.isStickyToCorner"
-        static let showsPreviousLine = "dynasic.settings.showsPreviousLine"
-        static let showsNextLine = "dynasic.settings.showsNextLine"
+        static let isAutoRotateEnabled = "dynasic.settings.isAutoRotateEnabled"
     }
 }

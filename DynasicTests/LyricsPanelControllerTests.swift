@@ -294,22 +294,166 @@ final class LyricsPanelControllerTests: XCTestCase {
         let visible = NSRect(x: 100, y: 200, width: 1_000, height: 800)
         let frame = NSRect(x: 0, y: 0, width: 200, height: 100)
 
-        let origins = LyricsPanelController.edgeAnchorFrames(for: frame, in: visible)
-            .map(\.origin)
+        let anchors = LyricsPanelController.edgeAnchorFrames(for: frame, in: visible)
 
         XCTAssertEqual(
-            origins,
+            anchors.map(\.origin),
             [
                 NSPoint(x: 100, y: 200),
                 NSPoint(x: 500, y: 200),
                 NSPoint(x: 900, y: 200),
-                NSPoint(x: 100, y: 550),
-                NSPoint(x: 900, y: 550),
+                NSPoint(x: 100, y: 500),
+                NSPoint(x: 1_000, y: 500),
                 NSPoint(x: 100, y: 900),
                 NSPoint(x: 500, y: 900),
                 NSPoint(x: 900, y: 900)
             ]
         )
+        XCTAssertEqual(
+            anchors.map(\.size),
+            [
+                NSSize(width: 200, height: 100),
+                NSSize(width: 200, height: 100),
+                NSSize(width: 200, height: 100),
+                NSSize(width: 100, height: 200),
+                NSSize(width: 100, height: 200),
+                NSSize(width: 200, height: 100),
+                NSSize(width: 200, height: 100),
+                NSSize(width: 200, height: 100)
+            ]
+        )
+    }
+
+    func testEdgeMidpointsChooseOrientationAndCornersPreserveIt() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isStickyToCorner = true
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let visible = try XCTUnwrap(NSScreen.main).visibleFrame
+        let horizontalSize = panel.frame.size
+
+        func movePanel(to origin: NSPoint) {
+            panel.setFrameOrigin(origin)
+            controller.finishUserMoveForTesting()
+        }
+
+        movePanel(
+            to: NSPoint(
+                x: visible.maxX - panel.frame.width,
+                y: visible.midY - panel.frame.height / 2
+            )
+        )
+        XCTAssertEqual(controller.contentOrientation, .vertical)
+        XCTAssertEqual(
+            panel.frame.size,
+            NSSize(width: horizontalSize.height, height: horizontalSize.width)
+        )
+        XCTAssertEqual(
+            panel.minSize,
+            NSSize(
+                width: LyricsPanelController.minimumExpandedSize.height,
+                height: LyricsPanelController.minimumExpandedSize.width
+            )
+        )
+
+        movePanel(
+            to: NSPoint(
+                x: visible.midX - panel.frame.width / 2,
+                y: visible.maxY - panel.frame.height
+            )
+        )
+        XCTAssertEqual(controller.contentOrientation, .horizontal)
+        XCTAssertEqual(panel.frame.size, horizontalSize)
+
+        movePanel(
+            to: NSPoint(x: visible.minX, y: visible.midY - panel.frame.height / 2)
+        )
+        XCTAssertEqual(controller.contentOrientation, .vertical)
+        let verticalSize = panel.frame.size
+
+        movePanel(to: NSPoint(x: visible.minX, y: visible.maxY - panel.frame.height))
+        XCTAssertEqual(controller.contentOrientation, .vertical)
+        XCTAssertEqual(panel.frame.size, verticalSize)
+
+        let restoredController = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+        XCTAssertEqual(restoredController.contentOrientation, .vertical)
+    }
+
+    func testDisablingAutoRotatePreservesOrientationAndSize() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isStickyToCorner = true
+        state.settings.isAutoRotateEnabled = false
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let visible = try XCTUnwrap(NSScreen.main).visibleFrame
+        let originalSize = panel.frame.size
+
+        panel.setFrameOrigin(
+            NSPoint(
+                x: visible.maxX - panel.frame.width,
+                y: visible.midY - panel.frame.height / 2
+            )
+        )
+        controller.finishUserMoveForTesting()
+
+        XCTAssertEqual(controller.contentOrientation, .horizontal)
+        XCTAssertEqual(panel.frame.size, originalSize)
+        XCTAssertEqual(panel.frame.maxX, visible.maxX, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.midY, visible.midY, accuracy: 0.5)
+    }
+
+    func testManualRotateSwapsSizeWhenAutoRotateIsDisabled() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isAutoRotateEnabled = false
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let visible = try XCTUnwrap(NSScreen.main).visibleFrame
+        let horizontalFrame = NSRect(
+            x: visible.midX - 260,
+            y: visible.midY - 120,
+            width: 520,
+            height: 240
+        )
+        panel.setFrame(horizontalFrame, display: false)
+
+        controller.rotateContent()
+
+        XCTAssertEqual(controller.contentOrientation, .vertical)
+        XCTAssertEqual(panel.frame.midX, horizontalFrame.midX, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.midY, horizontalFrame.midY, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.size, NSSize(width: 240, height: 520))
+
+        controller.rotateContent()
+
+        XCTAssertEqual(controller.contentOrientation, .horizontal)
+        XCTAssertEqual(panel.frame.midX, horizontalFrame.midX, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.midY, horizontalFrame.midY, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.size, horizontalFrame.size)
     }
 
     func testLyricsPresentationIdentityChangesOncePerDisplayedLine() throws {
@@ -358,8 +502,8 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertNotEqual(current.id, nextTrack.id)
         XCTAssertEqual(current.lines.map(\.line.text), ["Previous", "Current", "Next"])
 
-        let currentLines = current.visibleLines(showsPrevious: true, showsNext: true)
-        let advancedLines = advanced.visibleLines(showsPrevious: true, showsNext: true)
+        let currentLines = current.lines
+        let advancedLines = advanced.lines
         XCTAssertEqual(Set(currentLines.map(\.id)).count, currentLines.count)
         XCTAssertEqual(
             Set(currentLines.map(\.id)).intersection(Set(advancedLines.map(\.id))).count,

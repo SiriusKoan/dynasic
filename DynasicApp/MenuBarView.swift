@@ -93,8 +93,7 @@ struct SettingsView: View {
                 Toggle("Click-through", isOn: $state.settings.isClickThrough)
                 Toggle("Always on top", isOn: $state.settings.isAlwaysOnTop)
                 Toggle("Sticky to corner", isOn: $state.settings.isStickyToCorner)
-                Toggle("Show previous line", isOn: $state.settings.showsPreviousLine)
-                Toggle("Show next line", isOn: $state.settings.showsNextLine)
+                Toggle("Auto Rotate", isOn: $state.settings.isAutoRotateEnabled)
             }
         }
         .padding()

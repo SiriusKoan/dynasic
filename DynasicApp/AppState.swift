@@ -280,9 +280,8 @@ final class DynasicAppState: ObservableObject {
         clickThrough: \(settings.isClickThrough)
         alwaysOnTop: \(settings.isAlwaysOnTop)
         stickyToCorner: \(settings.isStickyToCorner)
+        autoRotate: \(settings.isAutoRotateEnabled)
         panelFrame: \(panelController?.frameDescription ?? "not created")
-        showPreviousLine: \(settings.showsPreviousLine)
-        showNextLine: \(settings.showsNextLine)
 
         Network
         -------

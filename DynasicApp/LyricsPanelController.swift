@@ -2,6 +2,11 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum LyricsPanelContentOrientation: String, Equatable {
+    case horizontal
+    case vertical
+}
+
 @MainActor
 private final class LyricsPanelWindow: NSPanel {
     private static let collapsedDragThreshold: CGFloat = 4
@@ -96,6 +101,11 @@ private final class LyricsPanelWindow: NSPanel {
 
 @MainActor
 final class LyricsPanelController: ObservableObject {
+    private struct EdgeAnchorTarget {
+        let frame: NSRect
+        let orientation: LyricsPanelContentOrientation?
+    }
+
     private enum FrameMutationState: Equatable {
         case idle
         case applying
@@ -105,20 +115,24 @@ final class LyricsPanelController: ObservableObject {
     static let minimumExpandedSize = NSSize(width: 420, height: 120)
     static let maximumExpandedSize = NSSize(width: 10_000, height: 360)
     static let collapsedSize = NSSize(width: 40, height: 40)
+    private static let unconstrainedExpandedSize = NSSize(width: 10_000, height: 10_000)
 
     private let state: DynasicAppState
     private let userDefaults: UserDefaults
     private let frameKey: String
     private let legacyOriginKey: String
+    private let orientationKey: String
     private let animationDuration: TimeInterval
     private var panel: LyricsPanelWindow?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
+    private var moveEndMonitor: Any?
     private var frameMutationState = FrameMutationState.idle
     private var expandedFrame: NSRect?
     private var collapsedFrameOrigin: NSPoint?
 
     @Published private(set) var isCollapsed = false
+    @Published private(set) var contentOrientation: LyricsPanelContentOrientation
 
     init(
         state: DynasicAppState,
@@ -127,11 +141,16 @@ final class LyricsPanelController: ObservableObject {
         legacyOriginKey: String = "dynasic.lyricsPanel.origin",
         animationDuration: TimeInterval = 0.22
     ) {
+        let orientationKey = "\(positionKey).contentOrientation"
         self.state = state
         self.userDefaults = userDefaults
         self.frameKey = positionKey
         self.legacyOriginKey = legacyOriginKey
+        self.orientationKey = orientationKey
         self.animationDuration = max(0, animationDuration)
+        self.contentOrientation = LyricsPanelContentOrientation(
+            rawValue: userDefaults.string(forKey: orientationKey) ?? ""
+        ) ?? .horizontal
     }
 
     deinit {
@@ -140,6 +159,9 @@ final class LyricsPanelController: ObservableObject {
         }
         if let resizeObserver {
             NotificationCenter.default.removeObserver(resizeObserver)
+        }
+        if let moveEndMonitor {
+            NSEvent.removeMonitor(moveEndMonitor)
         }
     }
 
@@ -193,6 +215,28 @@ final class LyricsPanelController: ObservableObject {
         }
     }
 
+    func rotateContent() {
+        guard let panel, !isCollapsed, frameMutationState == .idle else { return }
+
+        let frame = panel.frame
+        panel.minSize = NSSize(width: 1, height: 1)
+        panel.maxSize = Self.unconstrainedExpandedSize
+        setContentOrientation(contentOrientation == .horizontal ? .vertical : .horizontal)
+        let target = frameConstrainedToVisibleScreen(
+            NSRect(
+                x: frame.midX - frame.height / 2,
+                y: frame.midY - frame.width / 2,
+                width: frame.height,
+                height: frame.width
+            )
+        )
+        animateFrame(target, on: panel) { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            self.applyExpandedSizeLimits(to: panel)
+            self.recordFinishedFrame(panel.frame)
+        }
+    }
+
     func finishUserMoveForTesting() {
         finishUserMove()
     }
@@ -232,8 +276,7 @@ final class LyricsPanelController: ObservableObject {
         let hostingView = NSHostingView(rootView: LyricsPanelView(state: state, controller: self))
         hostingView.sizingOptions = []
         panel.contentView = hostingView
-        panel.minSize = Self.minimumExpandedSize
-        panel.maxSize = Self.maximumExpandedSize
+        applyExpandedSizeLimits(to: panel)
 
         if let frame = savedFrame() {
             let visibleFrame = frameConstrainedToVisibleScreen(frame)
@@ -258,6 +301,7 @@ final class LyricsPanelController: ObservableObject {
             guard let window = notification.object as? NSWindow else { return }
             MainActor.assumeIsolated {
                 self?.recordFrameChange(window)
+                self?.monitorUserMoveEnd()
             }
         }
         resizeObserver = NotificationCenter.default.addObserver(
@@ -279,14 +323,12 @@ final class LyricsPanelController: ObservableObject {
               values.allSatisfy(\.isFinite) else {
             return nil
         }
+        let limits = expandedSizeLimits
         return NSRect(
             x: values[0],
             y: values[1],
-            width: max(values[2], Self.minimumExpandedSize.width),
-            height: min(
-                max(values[3], Self.minimumExpandedSize.height),
-                Self.maximumExpandedSize.height
-            )
+            width: min(max(values[2], limits.minimum.width), limits.maximum.width),
+            height: min(max(values[3], limits.minimum.height), limits.maximum.height)
         )
     }
 
@@ -369,11 +411,11 @@ final class LyricsPanelController: ObservableObject {
         panel.styleMask.insert(.resizable)
         hideStandardWindowButtons(on: panel)
         panel.minSize = NSSize(width: 1, height: 1)
-        panel.maxSize = Self.maximumExpandedSize
+        panel.maxSize = Self.unconstrainedExpandedSize
         panel.ignoresMouseEvents = state.settings.isClickThrough
         animateFrame(frame, on: panel) { [weak self, weak panel] in
             guard let self, let panel else { return }
-            panel.minSize = Self.minimumExpandedSize
+            self.applyExpandedSizeLimits(to: panel)
             self.hideStandardWindowButtons(on: panel)
             self.expandedFrame = panel.frame
             self.saveFrame(panel.frame)
@@ -421,26 +463,58 @@ final class LyricsPanelController: ObservableObject {
 
     private func finishUserMove() {
         guard let panel, frameMutationState == .idle else { return }
+        stopMonitoringUserMoveEnd()
 
         guard state.settings.isStickyToCorner else {
             recordFinishedFrame(panel.frame)
             return
         }
 
-        let targetFrame = nearestEdgeAnchorFrame(for: panel.frame)
-        guard targetFrame != panel.frame else {
+        let target = nearestEdgeAnchorTarget(for: panel.frame)
+        let changesOrientation = target.orientation.map { $0 != contentOrientation } == true
+        if changesOrientation {
+            panel.minSize = NSSize(width: 1, height: 1)
+            panel.maxSize = Self.unconstrainedExpandedSize
+        }
+        if let orientation = target.orientation {
+            setContentOrientation(orientation)
+        }
+        guard target.frame != panel.frame else {
+            applyExpandedSizeLimits(to: panel)
             recordFinishedFrame(panel.frame)
             return
         }
 
         animateFrame(
-            targetFrame,
+            target.frame,
             on: panel,
             duration: animationDuration * 2.25
         ) { [weak self, weak panel] in
             guard let self, let panel else { return }
+            self.applyExpandedSizeLimits(to: panel)
             self.recordFinishedFrame(panel.frame)
         }
+    }
+
+    private func monitorUserMoveEnd() {
+        guard !isCollapsed,
+              state.settings.isStickyToCorner,
+              frameMutationState == .idle,
+              moveEndMonitor == nil else { return }
+
+        moveEndMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) {
+            [weak self] event in
+            MainActor.assumeIsolated {
+                self?.finishUserMove()
+            }
+            return event
+        }
+    }
+
+    private func stopMonitoringUserMoveEnd() {
+        guard let moveEndMonitor else { return }
+        NSEvent.removeMonitor(moveEndMonitor)
+        self.moveEndMonitor = nil
     }
 
     private func recordFinishedFrame(_ frame: NSRect) {
@@ -452,50 +526,123 @@ final class LyricsPanelController: ObservableObject {
         }
     }
 
-    private func nearestEdgeAnchorFrame(for frame: NSRect) -> NSRect {
-        let candidates = NSScreen.screens.flatMap { screen -> [NSRect] in
-            Self.edgeAnchorFrames(for: frame, in: screen.visibleFrame)
+    private func setContentOrientation(_ orientation: LyricsPanelContentOrientation) {
+        contentOrientation = orientation
+        userDefaults.set(orientation.rawValue, forKey: orientationKey)
+    }
+
+    private func nearestEdgeAnchorTarget(for frame: NSRect) -> EdgeAnchorTarget {
+        let candidates = NSScreen.screens.flatMap { screen in
+            Self.edgeAnchorTargets(
+                for: frame,
+                in: screen.visibleFrame,
+                currentOrientation: contentOrientation,
+                autoRotates: state.settings.isAutoRotateEnabled
+            )
         }
 
         guard let nearest = candidates.min(by: {
-            distanceSquared(from: frame.center, to: $0.center)
-                < distanceSquared(from: frame.center, to: $1.center)
+            distanceSquared(from: frame.center, to: $0.frame.center)
+                < distanceSquared(from: frame.center, to: $1.frame.center)
         }) else {
-            return frame
+            return EdgeAnchorTarget(frame: frame, orientation: nil)
         }
         return nearest
     }
 
-    static func edgeAnchorFrames(for frame: NSRect, in visibleFrame: NSRect) -> [NSRect] {
-        let width = min(frame.width, visibleFrame.width)
-        let height = min(frame.height, visibleFrame.height)
-        let minX = visibleFrame.minX
-        let midX = visibleFrame.midX - width / 2
-        let maxX = visibleFrame.maxX - width
-        let minY = visibleFrame.minY
-        let midY = visibleFrame.midY - height / 2
-        let maxY = visibleFrame.maxY - height
+    static func edgeAnchorFrames(
+        for frame: NSRect,
+        in visibleFrame: NSRect,
+        currentOrientation: LyricsPanelContentOrientation = .horizontal
+    ) -> [NSRect] {
+        edgeAnchorTargets(
+            for: frame,
+            in: visibleFrame,
+            currentOrientation: currentOrientation,
+            autoRotates: true
+        ).map(\.frame)
+    }
+
+    private static func edgeAnchorTargets(
+        for frame: NSRect,
+        in visibleFrame: NSRect,
+        currentOrientation: LyricsPanelContentOrientation,
+        autoRotates: Bool
+    ) -> [EdgeAnchorTarget] {
+        func target(
+            _ horizontalPosition: CGFloat,
+            _ verticalPosition: CGFloat,
+            _ orientation: LyricsPanelContentOrientation? = nil
+        ) -> EdgeAnchorTarget {
+            let orientation = autoRotates ? orientation : nil
+            var size = frame.size
+            if let orientation, orientation != currentOrientation {
+                size = NSSize(width: size.height, height: size.width)
+            }
+            size.width = min(size.width, visibleFrame.width)
+            size.height = min(size.height, visibleFrame.height)
+            return EdgeAnchorTarget(
+                frame: NSRect(
+                    x: visibleFrame.minX
+                        + (visibleFrame.width - size.width) * horizontalPosition,
+                    y: visibleFrame.minY
+                        + (visibleFrame.height - size.height) * verticalPosition,
+                    width: size.width,
+                    height: size.height
+                ),
+                orientation: orientation
+            )
+        }
 
         return [
-            NSRect(x: minX, y: minY, width: width, height: height),
-            NSRect(x: midX, y: minY, width: width, height: height),
-            NSRect(x: maxX, y: minY, width: width, height: height),
-            NSRect(x: minX, y: midY, width: width, height: height),
-            NSRect(x: maxX, y: midY, width: width, height: height),
-            NSRect(x: minX, y: maxY, width: width, height: height),
-            NSRect(x: midX, y: maxY, width: width, height: height),
-            NSRect(x: maxX, y: maxY, width: width, height: height)
+            target(0, 0),
+            target(0.5, 0, .horizontal),
+            target(1, 0),
+            target(0, 0.5, .vertical),
+            target(1, 0.5, .vertical),
+            target(0, 1),
+            target(0.5, 1, .horizontal),
+            target(1, 1)
         ]
+    }
+
+    private var expandedSizeLimits: (minimum: NSSize, maximum: NSSize) {
+        switch contentOrientation {
+        case .horizontal:
+            return (Self.minimumExpandedSize, Self.maximumExpandedSize)
+        case .vertical:
+            return (
+                NSSize(
+                    width: Self.minimumExpandedSize.height,
+                    height: Self.minimumExpandedSize.width
+                ),
+                NSSize(
+                    width: Self.maximumExpandedSize.height,
+                    height: Self.maximumExpandedSize.width
+                )
+            )
+        }
+    }
+
+    private func applyExpandedSizeLimits(to panel: NSWindow) {
+        let limits = expandedSizeLimits
+        panel.minSize = limits.minimum
+        panel.maxSize = limits.maximum
     }
 
     private func frameConstrainedToVisibleScreen(_ frame: NSRect) -> NSRect {
         guard let screen = screenBestMatching(frame) else { return frame }
 
         let visible = screen.visibleFrame
-        let width = min(max(frame.width, Self.minimumExpandedSize.width), visible.width)
+        let limits = expandedSizeLimits
+        let width = min(
+            max(frame.width, limits.minimum.width),
+            limits.maximum.width,
+            visible.width
+        )
         let height = min(
-            max(frame.height, Self.minimumExpandedSize.height),
-            Self.maximumExpandedSize.height,
+            max(frame.height, limits.minimum.height),
+            limits.maximum.height,
             visible.height
         )
         let x = min(max(frame.minX, visible.minX), visible.maxX - width)
