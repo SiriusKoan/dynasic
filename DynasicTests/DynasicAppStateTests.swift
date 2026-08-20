@@ -128,38 +128,6 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertNotNil(state.lastObservationError)
     }
 
-    func testPlaybackControlsForwardCommandsWithoutBlockingState() async {
-        let playbackController = RecordingPlaybackController()
-        let state = DynasicAppState(
-            userDefaults: UserDefaults(suiteName: "dynasic-controls-\(UUID().uuidString)")!,
-            playbackController: playbackController
-        )
-
-        let previous = state.previousTrack()
-        let playPause = state.togglePlayPause()
-        let next = state.nextTrack()
-
-        await previous.value
-        await playPause.value
-        await next.value
-
-        let commands = await playbackController.commands()
-        XCTAssertEqual(commands, [.previousTrack, .playPause, .nextTrack])
-        XCTAssertNil(state.lastPlaybackControlError)
-    }
-
-    func testPlaybackControlErrorIsExposed() async {
-        let playbackController = FailingPlaybackController()
-        let state = DynasicAppState(
-            userDefaults: UserDefaults(suiteName: "dynasic-control-error-\(UUID().uuidString)")!,
-            playbackController: playbackController
-        )
-
-        await state.nextTrack().value
-
-        XCTAssertEqual(state.lastPlaybackControlError, "Playback control failed")
-    }
-
     func testUnavailableArtworkIsRequestedOnTrackChangesAndRetriedAfterReturning() async {
         let firstTrack = TrackMetadata(
             title: "First Song",
@@ -271,24 +239,6 @@ private struct FailingObservationBackend: AppleMusicObservationBackend {
 
 private enum ObservationTestError: Error {
     case unavailable
-}
-
-private actor RecordingPlaybackController: PlaybackControlling {
-    private var recordedCommands: [PlaybackControlCommand] = []
-
-    func perform(_ command: PlaybackControlCommand) async throws {
-        recordedCommands.append(command)
-    }
-
-    func commands() -> [PlaybackControlCommand] {
-        recordedCommands
-    }
-}
-
-private actor FailingPlaybackController: PlaybackControlling {
-    func perform(_ command: PlaybackControlCommand) async throws {
-        throw PlaybackControlError.scriptFailed("Playback control failed")
-    }
 }
 
 private actor SequenceObservationBackend: AppleMusicObservationBackend {

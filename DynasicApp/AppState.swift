@@ -13,7 +13,6 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var lastSnapshotAt: Date?
     @Published private(set) var lastObservationLatency: TimeInterval?
     @Published private(set) var lastObservationError: String?
-    @Published private(set) var lastPlaybackControlError: String?
     @Published private(set) var lastArtworkError: String?
     @Published private(set) var trackArtwork: NSImage?
     @Published var isLyricsVisible = false
@@ -32,10 +31,8 @@ final class DynasicAppState: ObservableObject {
     let coordinator: LyricsCoordinator
     private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
-    private let playbackController: any PlaybackControlling
     private let artworkProvider: any AppleMusicArtworkProviding
     private let updateScheduler = AppUpdateScheduler()
-    private var playbackCommandGeneration: UInt64 = 0
     private var artworkTrackIdentity: TrackIdentity?
     private var artworkCache: [TrackIdentity: NSImage] = [:]
     private var artworkTask: Task<Void, Never>?
@@ -48,12 +45,10 @@ final class DynasicAppState: ObservableObject {
     init(
         userDefaults: UserDefaults = .standard,
         musicBackend: any AppleMusicObservationBackend = AppleMusicObservationService(),
-        playbackController: any PlaybackControlling = AppleMusicPlaybackController(),
         artworkProvider: any AppleMusicArtworkProviding = AppleMusicArtworkService(),
         startImmediately: Bool = false
     ) {
         self.musicBackend = musicBackend
-        self.playbackController = playbackController
         self.artworkProvider = artworkProvider
         let settingsStore = DynasicSettingsStore(userDefaults: userDefaults)
         self.settingsStore = settingsStore
@@ -129,51 +124,11 @@ final class DynasicAppState: ObservableObject {
         }
     }
 
-    @discardableResult
-    func previousTrack() -> Task<Void, Never> {
-        performPlaybackCommand(.previousTrack)
-    }
-
-    @discardableResult
-    func togglePlayPause() -> Task<Void, Never> {
-        performPlaybackCommand(.playPause)
-    }
-
-    @discardableResult
-    func nextTrack() -> Task<Void, Never> {
-        performPlaybackCommand(.nextTrack)
-    }
-
     private func refreshViewStateNow() async {
         guard musicBackendStatus != "unavailable" else { return }
         let display = await coordinator.currentDisplay()
         viewState = display.state
         estimatedPlaybackPosition = display.position
-    }
-
-    private func performPlaybackCommand(_ command: PlaybackControlCommand) -> Task<Void, Never> {
-        playbackCommandGeneration &+= 1
-        let commandGeneration = playbackCommandGeneration
-        lastPlaybackControlError = nil
-        let playbackController = self.playbackController
-        return Task { @MainActor [weak self] in
-            do {
-                try await playbackController.perform(command)
-                guard let self, self.playbackCommandGeneration == commandGeneration else { return }
-                self.lastPlaybackControlError = nil
-            } catch let error as PlaybackControlError {
-                guard let self, self.playbackCommandGeneration == commandGeneration else { return }
-                switch error {
-                case .scriptUnavailable:
-                    self.lastPlaybackControlError = "Playback control script unavailable"
-                case let .scriptFailed(message):
-                    self.lastPlaybackControlError = message
-                }
-            } catch {
-                guard let self, self.playbackCommandGeneration == commandGeneration else { return }
-                self.lastPlaybackControlError = String(describing: error)
-            }
-        }
     }
 
     private func observeOnce() async {
@@ -269,14 +224,6 @@ final class DynasicAppState: ObservableObject {
         diagnosticTrack?.duration
     }
 
-    var isPlaying: Bool {
-        reportedPlaybackState == .playing
-    }
-
-    var hasCurrentTrack: Bool {
-        diagnosticTrack != nil
-    }
-
     var diagnosticsText: String {
         let track = diagnosticTrack
         let lyrics = diagnosticLyrics
@@ -346,7 +293,6 @@ final class DynasicAppState: ObservableObject {
         Errors
         ------
         last error: \(diagnosticError)
-        playback control error: \(lastPlaybackControlError ?? "None")
         artwork error: \(lastArtworkError ?? "None")
         """
     }

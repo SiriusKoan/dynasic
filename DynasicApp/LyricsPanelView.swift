@@ -72,10 +72,6 @@ struct LyricsPanelView: View {
             }
             .frame(maxWidth: .infinity)
 
-            Divider()
-
-            playbackControls
-
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
@@ -151,44 +147,6 @@ struct LyricsPanelView: View {
     private var clampedPlaybackPosition: TimeInterval {
         guard let duration = state.trackDuration, duration > 0 else { return 0 }
         return min(max(state.estimatedPlaybackPosition ?? 0, 0), duration)
-    }
-
-    private var playbackControls: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 24) {
-                Button {
-                    _ = state.previousTrack()
-                } label: {
-                    Image(systemName: "backward.end.fill")
-                }
-                .accessibilityLabel("Previous track")
-
-                Button {
-                    _ = state.togglePlayPause()
-                } label: {
-                    Image(systemName: state.isPlaying ? "pause.fill" : "play.fill")
-                }
-                .accessibilityLabel(state.isPlaying ? "Pause" : "Play")
-
-                Button {
-                    _ = state.nextTrack()
-                } label: {
-                    Image(systemName: "forward.end.fill")
-                }
-                .accessibilityLabel("Next track")
-            }
-            .font(.title3)
-            .buttonStyle(.plain)
-            .disabled(!state.hasCurrentTrack)
-
-            if let error = state.lastPlaybackControlError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 
     private var lyricsOnlyLayout: some View {
