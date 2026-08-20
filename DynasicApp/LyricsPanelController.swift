@@ -198,9 +198,7 @@ final class LyricsPanelController: ObservableObject {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.titlebarSeparatorStyle = .none
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        hideStandardWindowButtons(on: panel)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -331,6 +329,8 @@ final class LyricsPanelController: ObservableObject {
         isCollapsed = true
         panel.isCollapsedForInteraction = true
         panel.isMovableByWindowBackground = false
+        panel.styleMask.remove(.resizable)
+        hideStandardWindowButtons(on: panel)
         panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
             x: panel.frame.minX,
@@ -355,15 +355,24 @@ final class LyricsPanelController: ObservableObject {
         collapsedFrameOrigin = nil
         panel.isCollapsedForInteraction = false
         panel.isMovableByWindowBackground = true
+        panel.styleMask.insert(.resizable)
+        hideStandardWindowButtons(on: panel)
         panel.minSize = NSSize(width: 1, height: 1)
         panel.maxSize = Self.maximumExpandedSize
         panel.ignoresMouseEvents = state.settings.isClickThrough
         animateFrame(frame, on: panel) { [weak self, weak panel] in
             guard let self, let panel else { return }
             panel.minSize = Self.minimumExpandedSize
+            self.hideStandardWindowButtons(on: panel)
             self.expandedFrame = panel.frame
             self.saveFrame(panel.frame)
         }
+    }
+
+    private func hideStandardWindowButtons(on panel: NSWindow) {
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
     }
 
     private func applyFrame(_ frame: NSRect, to panel: NSWindow) {

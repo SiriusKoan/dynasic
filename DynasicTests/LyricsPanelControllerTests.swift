@@ -91,7 +91,7 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(panel.frame.size, LyricsPanelController.collapsedSize)
         XCTAssertEqual(panel.minSize, LyricsPanelController.collapsedSize)
         XCTAssertEqual(panel.maxSize, LyricsPanelController.collapsedSize)
-        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertFalse(panel.styleMask.contains(.resizable))
         XCTAssertFalse(panel.ignoresMouseEvents)
 
         controller.toggleCollapsed()
@@ -164,7 +164,7 @@ final class LyricsPanelControllerTests: XCTestCase {
 
         controller.toggleCollapsed()
         XCTAssertFalse(panel.ignoresMouseEvents)
-        XCTAssertTrue(panel.styleMask.contains(.resizable))
+        XCTAssertFalse(panel.styleMask.contains(.resizable))
         XCTAssertEqual(panel.minSize, LyricsPanelController.collapsedSize)
         XCTAssertEqual(panel.maxSize, LyricsPanelController.collapsedSize)
 
