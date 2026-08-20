@@ -235,6 +235,36 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(panel.frame.maxY, visible.maxY, accuracy: 0.5)
     }
 
+    func testMoveNotificationAutomaticallyTriggersStickySnap() async throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isStickyToCorner = true
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let visible = try XCTUnwrap(NSScreen.main).visibleFrame
+        panel.setFrame(
+            NSRect(
+                x: visible.midX - 200,
+                y: visible.maxY - 190,
+                width: 400,
+                height: 160
+            ),
+            display: false
+        )
+        NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: panel)
+
+        try await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(panel.frame.midX, visible.midX, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.maxY, visible.maxY, accuracy: 0.5)
+    }
+
     func testEdgeAnchorFramesIncludeFourCornersAndFourEdgeMidpoints() {
         let visible = NSRect(x: 100, y: 200, width: 1_000, height: 800)
         let frame = NSRect(x: 0, y: 0, width: 200, height: 100)

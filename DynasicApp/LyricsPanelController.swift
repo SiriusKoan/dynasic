@@ -9,82 +9,74 @@ private final class LyricsPanelWindow: NSPanel {
 
     var isCollapsedForInteraction = false
 
-    private var pointerDownFrame: NSRect?
     private var collapsedPointerDownLocation: NSPoint?
     private var collapsedPointerDownOrigin: NSPoint?
     private var didMoveCollapsedPanel = false
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown {
-            pointerDownFrame = frame
-            if isCollapsedForInteraction {
-                collapsedPointerDownLocation = convertPoint(toScreen: event.locationInWindow)
-                collapsedPointerDownOrigin = frame.origin
-                didMoveCollapsedPanel = false
-            }
+        guard isCollapsedForInteraction else {
+            super.sendEvent(event)
+            return
         }
 
-        if isCollapsedForInteraction {
-            switch event.type {
-            case .leftMouseDragged:
-                guard let collapsedPointerDownLocation,
-                      let collapsedPointerDownOrigin else { return }
+        if event.type == .leftMouseDown {
+            collapsedPointerDownLocation = convertPoint(toScreen: event.locationInWindow)
+            collapsedPointerDownOrigin = frame.origin
+            didMoveCollapsedPanel = false
+        }
+
+        switch event.type {
+        case .leftMouseDragged:
+            guard let collapsedPointerDownLocation,
+                  let collapsedPointerDownOrigin else { return }
+            let currentLocation = convertPoint(toScreen: event.locationInWindow)
+            let delta = NSPoint(
+                x: currentLocation.x - collapsedPointerDownLocation.x,
+                y: currentLocation.y - collapsedPointerDownLocation.y
+            )
+            guard abs(delta.x) > 0.5 || abs(delta.y) > 0.5 else { return }
+            setFrameOrigin(
+                NSPoint(
+                    x: collapsedPointerDownOrigin.x + delta.x,
+                    y: collapsedPointerDownOrigin.y + delta.y
+                )
+            )
+            didMoveCollapsedPanel = true
+            return
+        case .leftMouseUp:
+            var didMove = didMoveCollapsedPanel
+            if !didMove,
+               let collapsedPointerDownLocation,
+               let collapsedPointerDownOrigin {
                 let currentLocation = convertPoint(toScreen: event.locationInWindow)
                 let delta = NSPoint(
                     x: currentLocation.x - collapsedPointerDownLocation.x,
                     y: currentLocation.y - collapsedPointerDownLocation.y
                 )
-                guard abs(delta.x) > 0.5 || abs(delta.y) > 0.5 else { return }
-                setFrameOrigin(
-                    NSPoint(
-                        x: collapsedPointerDownOrigin.x + delta.x,
-                        y: collapsedPointerDownOrigin.y + delta.y
-                    )
-                )
-                didMoveCollapsedPanel = true
-                return
-            case .leftMouseUp:
-                var didMove = didMoveCollapsedPanel
-                if !didMove,
-                   let collapsedPointerDownLocation,
-                   let collapsedPointerDownOrigin {
-                    let currentLocation = convertPoint(toScreen: event.locationInWindow)
-                    let delta = NSPoint(
-                        x: currentLocation.x - collapsedPointerDownLocation.x,
-                        y: currentLocation.y - collapsedPointerDownLocation.y
-                    )
-                    if abs(delta.x) > 0.5 || abs(delta.y) > 0.5 {
-                        setFrameOrigin(
-                            NSPoint(
-                                x: collapsedPointerDownOrigin.x + delta.x,
-                                y: collapsedPointerDownOrigin.y + delta.y
-                            )
+                if abs(delta.x) > 0.5 || abs(delta.y) > 0.5 {
+                    setFrameOrigin(
+                        NSPoint(
+                            x: collapsedPointerDownOrigin.x + delta.x,
+                            y: collapsedPointerDownOrigin.y + delta.y
                         )
-                        didMove = true
-                    }
+                    )
+                    didMove = true
                 }
-                pointerDownFrame = nil
-                collapsedPointerDownLocation = nil
-                collapsedPointerDownOrigin = nil
-                didMoveCollapsedPanel = false
-                if didMove {
-                    onUserFinishedMoving?()
-                } else {
-                    onUserTapped?()
-                }
-                return
-            default:
-                break
             }
+            collapsedPointerDownLocation = nil
+            collapsedPointerDownOrigin = nil
+            didMoveCollapsedPanel = false
+            if didMove {
+                onUserFinishedMoving?()
+            } else {
+                onUserTapped?()
+            }
+            return
+        default:
+            break
         }
 
         super.sendEvent(event)
-        guard event.type == .leftMouseUp else { return }
-        let didMove = pointerDownFrame.map { frame != $0 } ?? false
-        pointerDownFrame = nil
-        if didMove {
-            onUserFinishedMoving?()
-        }
     }
 }
 
@@ -108,6 +100,7 @@ final class LyricsPanelController: ObservableObject {
     private var panel: LyricsPanelWindow?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
+    private var moveCompletionTask: Task<Void, Never>?
     private var frameMutationState = FrameMutationState.idle
     private var expandedFrame: NSRect?
     private var collapsedFrameOrigin: NSPoint?
@@ -129,6 +122,7 @@ final class LyricsPanelController: ObservableObject {
     }
 
     deinit {
+        moveCompletionTask?.cancel()
         if let moveObserver {
             NotificationCenter.default.removeObserver(moveObserver)
         }
@@ -254,6 +248,7 @@ final class LyricsPanelController: ObservableObject {
             guard let window = notification.object as? NSWindow else { return }
             MainActor.assumeIsolated {
                 self?.recordFrameChange(window)
+                self?.scheduleStickySnap()
             }
         }
         resizeObserver = NotificationCenter.default.addObserver(
@@ -382,10 +377,12 @@ final class LyricsPanelController: ObservableObject {
     private func animateFrame(
         _ frame: NSRect,
         on panel: NSWindow,
+        duration: TimeInterval? = nil,
         completion: @escaping @MainActor () -> Void
     ) {
+        let duration = duration ?? animationDuration
         frameMutationState = .animating
-        guard animationDuration > 0 else {
+        guard duration > 0 else {
             panel.setFrame(frame, display: false, animate: false)
             frameMutationState = .idle
             completion()
@@ -393,7 +390,7 @@ final class LyricsPanelController: ObservableObject {
         }
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = animationDuration
+            context.duration = duration
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().setFrame(frame, display: true)
         } completionHandler: {
@@ -404,8 +401,26 @@ final class LyricsPanelController: ObservableObject {
         }
     }
 
+    private func scheduleStickySnap() {
+        guard state.settings.isStickyToCorner,
+              frameMutationState == .idle else { return }
+
+        moveCompletionTask?.cancel()
+        moveCompletionTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(120))
+            while !Task.isCancelled, NSEvent.pressedMouseButtons & 1 != 0 {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            guard !Task.isCancelled else { return }
+            self?.finishUserMove()
+        }
+    }
+
     private func finishUserMove() {
         guard let panel, frameMutationState == .idle else { return }
+
+        moveCompletionTask?.cancel()
+        moveCompletionTask = nil
 
         guard state.settings.isStickyToCorner else {
             recordFinishedFrame(panel.frame)
@@ -418,7 +433,11 @@ final class LyricsPanelController: ObservableObject {
             return
         }
 
-        animateFrame(targetFrame, on: panel) { [weak self, weak panel] in
+        animateFrame(
+            targetFrame,
+            on: panel,
+            duration: animationDuration * 2.25
+        ) { [weak self, weak panel] in
             guard let self, let panel else { return }
             self.recordFinishedFrame(panel.frame)
         }
