@@ -331,7 +331,6 @@ final class LyricsPanelController: ObservableObject {
         isCollapsed = true
         panel.isCollapsedForInteraction = true
         panel.isMovableByWindowBackground = false
-        panel.styleMask.remove(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
             x: panel.frame.minX,
@@ -356,7 +355,6 @@ final class LyricsPanelController: ObservableObject {
         collapsedFrameOrigin = nil
         panel.isCollapsedForInteraction = false
         panel.isMovableByWindowBackground = true
-        panel.styleMask.insert(.resizable)
         panel.minSize = NSSize(width: 1, height: 1)
         panel.maxSize = Self.maximumExpandedSize
         panel.ignoresMouseEvents = state.settings.isClickThrough
@@ -407,9 +405,8 @@ final class LyricsPanelController: ObservableObject {
 
         moveCompletionTask?.cancel()
         moveCompletionTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(120))
             while !Task.isCancelled, NSEvent.pressedMouseButtons & 1 != 0 {
-                try? await Task.sleep(for: .milliseconds(50))
+                try? await Task.sleep(for: .milliseconds(16))
             }
             guard !Task.isCancelled else { return }
             self?.finishUserMove()
