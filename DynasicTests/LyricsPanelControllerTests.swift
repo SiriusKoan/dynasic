@@ -210,6 +210,27 @@ final class LyricsPanelControllerTests: XCTestCase {
         )
     }
 
+    func testCollapsedSmallPointerMovementStillExpands() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let controller = LyricsPanelController(
+            state: DynasicAppState(userDefaults: defaults),
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        controller.toggleCollapsed()
+        let startLocation = NSPoint(x: panel.frame.minX + 10, y: panel.frame.minY + 10)
+        let endLocation = NSPoint(x: startLocation.x + 2, y: startLocation.y + 2)
+
+        panel.sendEvent(mouseEvent(.leftMouseDown, at: startLocation, for: panel))
+        panel.sendEvent(mouseEvent(.leftMouseDragged, at: endLocation, for: panel))
+        panel.sendEvent(mouseEvent(.leftMouseUp, at: endLocation, for: panel))
+
+        XCTAssertFalse(controller.isCollapsed)
+    }
+
     func testStickyToEdgeAnchorRunsOnlyWhenUserMoveFinishes() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
@@ -238,7 +259,7 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(panel.frame.maxY, visible.maxY, accuracy: 0.5)
     }
 
-    func testMoveNotificationAutomaticallyTriggersStickySnap() async throws {
+    func testStickySnapStartsAfterMouseRelease() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
         state.settings.isStickyToCorner = true
@@ -251,18 +272,19 @@ final class LyricsPanelControllerTests: XCTestCase {
         controller.show()
         let panel = try XCTUnwrap(controller.panelForTesting)
         let visible = try XCTUnwrap(NSScreen.main).visibleFrame
-        panel.setFrame(
-            NSRect(
-                x: visible.midX - 200,
-                y: visible.maxY - 190,
-                width: 400,
-                height: 160
-            ),
-            display: false
+        let startLocation = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+        let freeFrame = NSRect(
+            x: visible.midX - 200,
+            y: visible.maxY - 190,
+            width: 400,
+            height: 160
         )
+        panel.sendEvent(mouseEvent(.leftMouseDown, at: startLocation, for: panel))
+        panel.setFrame(freeFrame, display: false)
         NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: panel)
+        XCTAssertEqual(panel.frame, freeFrame)
 
-        try await Task.sleep(for: .milliseconds(250))
+        panel.sendEvent(mouseEvent(.leftMouseUp, at: startLocation, for: panel))
 
         XCTAssertEqual(panel.frame.midX, visible.midX, accuracy: 0.5)
         XCTAssertEqual(panel.frame.maxY, visible.maxY, accuracy: 0.5)

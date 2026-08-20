@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 private final class LyricsPanelWindow: NSPanel {
+    private static let collapsedDragThreshold: CGFloat = 4
+
     var onUserFinishedMoving: (() -> Void)?
     var onUserTapped: (() -> Void)?
 
@@ -12,10 +14,22 @@ private final class LyricsPanelWindow: NSPanel {
     private var collapsedPointerDownLocation: NSPoint?
     private var collapsedPointerDownOrigin: NSPoint?
     private var didMoveCollapsedPanel = false
+    private var expandedPointerDownOrigin: NSPoint?
 
     override func sendEvent(_ event: NSEvent) {
         guard isCollapsedForInteraction else {
+            if event.type == .leftMouseDown {
+                expandedPointerDownOrigin = frame.origin
+            }
             super.sendEvent(event)
+            if event.type == .leftMouseDown || event.type == .leftMouseUp,
+               let expandedPointerDownOrigin,
+               expandedPointerDownOrigin != frame.origin {
+                self.expandedPointerDownOrigin = nil
+                onUserFinishedMoving?()
+            } else if event.type == .leftMouseUp {
+                expandedPointerDownOrigin = nil
+            }
             return
         }
 
@@ -34,7 +48,7 @@ private final class LyricsPanelWindow: NSPanel {
                 x: currentLocation.x - collapsedPointerDownLocation.x,
                 y: currentLocation.y - collapsedPointerDownLocation.y
             )
-            guard abs(delta.x) > 0.5 || abs(delta.y) > 0.5 else { return }
+            guard hypot(delta.x, delta.y) >= Self.collapsedDragThreshold else { return }
             setFrameOrigin(
                 NSPoint(
                     x: collapsedPointerDownOrigin.x + delta.x,
@@ -53,7 +67,7 @@ private final class LyricsPanelWindow: NSPanel {
                     x: currentLocation.x - collapsedPointerDownLocation.x,
                     y: currentLocation.y - collapsedPointerDownLocation.y
                 )
-                if abs(delta.x) > 0.5 || abs(delta.y) > 0.5 {
+                if hypot(delta.x, delta.y) >= Self.collapsedDragThreshold {
                     setFrameOrigin(
                         NSPoint(
                             x: collapsedPointerDownOrigin.x + delta.x,
@@ -100,7 +114,6 @@ final class LyricsPanelController: ObservableObject {
     private var panel: LyricsPanelWindow?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
-    private var moveCompletionTask: Task<Void, Never>?
     private var frameMutationState = FrameMutationState.idle
     private var expandedFrame: NSRect?
     private var collapsedFrameOrigin: NSPoint?
@@ -122,7 +135,6 @@ final class LyricsPanelController: ObservableObject {
     }
 
     deinit {
-        moveCompletionTask?.cancel()
         if let moveObserver {
             NotificationCenter.default.removeObserver(moveObserver)
         }
@@ -246,7 +258,6 @@ final class LyricsPanelController: ObservableObject {
             guard let window = notification.object as? NSWindow else { return }
             MainActor.assumeIsolated {
                 self?.recordFrameChange(window)
-                self?.scheduleStickySnap()
             }
         }
         resizeObserver = NotificationCenter.default.addObserver(
@@ -408,25 +419,8 @@ final class LyricsPanelController: ObservableObject {
         }
     }
 
-    private func scheduleStickySnap() {
-        guard state.settings.isStickyToCorner,
-              frameMutationState == .idle else { return }
-
-        moveCompletionTask?.cancel()
-        moveCompletionTask = Task { [weak self] in
-            while !Task.isCancelled, NSEvent.pressedMouseButtons & 1 != 0 {
-                try? await Task.sleep(for: .milliseconds(16))
-            }
-            guard !Task.isCancelled else { return }
-            self?.finishUserMove()
-        }
-    }
-
     private func finishUserMove() {
         guard let panel, frameMutationState == .idle else { return }
-
-        moveCompletionTask?.cancel()
-        moveCompletionTask = nil
 
         guard state.settings.isStickyToCorner else {
             recordFinishedFrame(panel.frame)
