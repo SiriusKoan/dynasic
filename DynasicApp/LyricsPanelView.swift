@@ -129,6 +129,12 @@ struct LyricsPanelView: View {
                 }
             }
 
+            if state.settings.isWaveformEnabled,
+               let frame = state.waveformState.frame {
+                WaveformView(frame: frame)
+                    .frame(height: 28)
+            }
+
             playbackProgress
         }
         .frame(minWidth: 180, idealWidth: 220, maxWidth: 280, alignment: .leading)
@@ -155,24 +161,26 @@ struct LyricsPanelView: View {
     @ViewBuilder
     private var playbackProgress: some View {
         if let duration = state.trackDuration, duration > 0 {
-            ProgressView(value: clampedPlaybackPosition, total: duration)
-                .progressViewStyle(.linear)
-
-            HStack {
+            HStack(spacing: 8) {
                 Text(formattedTime(state.estimatedPlaybackPosition))
-                Spacer()
+                ProgressView(value: clampedPlaybackPosition, total: duration)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: .infinity)
                 Text(formattedTime(duration))
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
         } else {
-            ProgressView(value: 0, total: 1)
-                .progressViewStyle(.linear)
-                .opacity(0.35)
-
-            Text("— / —")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Text("—")
+                ProgressView(value: 0, total: 1)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: .infinity)
+                    .opacity(0.35)
+                Text("—")
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -276,6 +284,32 @@ struct LyricsPanelView: View {
         guard let value, value.isFinite, value >= 0 else { return "—" }
         let totalSeconds = Int(value.rounded(.down))
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
+private struct WaveformView: View {
+    let frame: WaveformFrame
+
+    var body: some View {
+        GeometryReader { proxy in
+            let spacing: CGFloat = 2
+            let count = CGFloat(WaveformSpectrumProcessor.columnCount)
+            let barWidth = max(1, (proxy.size.width - spacing * (count - 1)) / count)
+
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(Array(frame.levels.prefix(WaveformSpectrumProcessor.columnCount).enumerated()), id: \.offset) { _, level in
+                    Capsule()
+                        .frame(
+                            width: barWidth,
+                            height: max(2, proxy.size.height * CGFloat(min(max(level, 0), 1)))
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .foregroundStyle(.primary.opacity(0.72))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Apple Music frequency spectrum")
     }
 }
 

@@ -168,6 +168,7 @@ final class LyricsPanelController: ObservableObject {
     func show() {
         let panel = makePanelIfNeeded()
         panel.orderFrontRegardless()
+        state.refreshWaveformCapture()
         guard !isCollapsed, frameMutationState != .animating else { return }
 
         let visibleFrame = frameConstrainedToVisibleScreen(panel.frame)
@@ -178,6 +179,7 @@ final class LyricsPanelController: ObservableObject {
 
     func hide() {
         panel?.orderOut(nil)
+        state.refreshWaveformCapture()
     }
 
     func setClickThrough(_ enabled: Bool) {
@@ -380,6 +382,7 @@ final class LyricsPanelController: ObservableObject {
         expandedFrame = panel.frame
         saveFrame(panel.frame)
         isCollapsed = true
+        state.refreshWaveformCapture()
         panel.isCollapsedForInteraction = true
         panel.isMovableByWindowBackground = false
         panel.styleMask.remove(.resizable)
@@ -405,6 +408,7 @@ final class LyricsPanelController: ObservableObject {
 
         let frame = frameConstrainedToVisibleScreen(expandedFrame ?? panel.frame)
         isCollapsed = false
+        state.refreshWaveformCapture()
         collapsedFrameOrigin = nil
         panel.isCollapsedForInteraction = false
         panel.isMovableByWindowBackground = true

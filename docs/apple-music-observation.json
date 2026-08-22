@@ -1,0 +1,120 @@
+{
+  "milestone": "M0",
+  "status": "pass",
+  "environment": {
+    "macOS": "26.5 (25F71)",
+    "musicApp": "1.6.5",
+    "swift": "Apple Swift 6.3.3",
+    "xcode": "unavailable; Command Line Tools active"
+  },
+  "mechanisms": {
+    "musicKit": {
+      "compileCheck": "pass",
+      "result": "ApplicationMusicPlayer is the app-owned player and cannot observe Music.app. Not selected."
+    },
+    "appleEvents": {
+      "appProbe": "pass for observed scenarios",
+      "address": "/System/Applications/Music.app",
+      "privateApi": false
+    },
+    "coreAudioProcessTap": {
+      "implementation": "complete",
+      "manualPOC": "pending signed-build verification",
+      "minimumMacOS": "14.2",
+      "target": "Music.app PID translated to a Core Audio process AudioObjectID",
+      "tap": "private mono mixdown process tap attached to a private aggregate device",
+      "permission": "NSAudioCaptureUsageDescription; authorization begins when aggregate-device IO starts",
+      "screenCaptureKitFallback": false,
+      "privateOrUndocumentedFrameworks": false
+    }
+  },
+  "scenarios": {
+    "libraryTrack": {
+      "status": "pass",
+      "sample": {
+        "title": "Glass of Spilling Heart",
+        "artist": "Chang Chin-lan(CV.Maki Kawase)",
+        "album": "Glass of Spilling Heart - Single",
+        "duration": 243.609,
+        "state": "playing"
+      }
+    },
+    "albumPlayback": {
+      "status": "pass",
+      "sample": {
+        "title": "Natsuno Yozara Ni Tairin Saite",
+        "artist": "Akiyuki Tateyama",
+        "album": "Laid-Back Camp the Movie (Original Motion Picture Soundtrack)",
+        "state": "playing"
+      }
+    },
+    "playlistPlayback": {
+      "status": "pass",
+      "sample": {
+        "title": "Shiny Days",
+        "artist": "Asaka",
+        "album": "Shiny Days",
+        "state": "playing"
+      }
+    },
+    "pauseResume": {
+      "status": "pass",
+      "evidence": "Probe changed to paused and then playing without losing metadata."
+    },
+    "seekForward": {
+      "status": "pass",
+      "evidence": "Position moved from approximately 27 seconds to approximately 189 seconds."
+    },
+    "seekBackward": {
+      "status": "pass",
+      "evidence": "Position moved from approximately 189 seconds to approximately 56 seconds."
+    },
+    "nextTrack": {
+      "status": "pass",
+      "evidence": "Probe observed a title, artist, album, duration, and position change after Next."
+    },
+    "previousTrack": {
+      "status": "pass",
+      "evidence": "First press restarted the current track; second press changed to the previous track."
+    },
+    "streamingTrackNotInLibrary": {
+      "status": "pass",
+      "sample": {
+        "title": "Seize the Day",
+        "artist": "Asaka",
+        "album": "Seize the Day - EP",
+        "persistentID": "F55D4925E639DACE"
+      },
+      "evidence": "The current-track More menu exposed Add to Library, while MusicProbe observed metadata, duration, position, and persistent ID."
+    },
+    "autoplayTrack": {
+      "status": "pass",
+      "sample": {
+        "title": "Yoake No Shinkokyuu",
+        "artist": "Akiyuki Tateyama",
+        "album": "Tv Anime \"Laid-Back Camp\" Original Soundtrack",
+        "duration": 149.501,
+        "persistentID": "51C06E80C6A3A6BD"
+      },
+      "evidence": "After Continue Playing was cleared and AutoPlay was enabled, Music automatically switched to this track."
+    }
+  },
+  "waveform": {
+    "backend": "Core Audio process tap",
+    "representation": "24-band real-time spectrum from 20 Hz to 20 kHz using a 4096-sample Hann-windowed FFT",
+    "amplitudeMapping": "mean FFT-bin power per logarithmic band, converted to dBFS and mapped from -72...0 dBFS to 0...1",
+    "uiRateHz": 20,
+    "automaticRecovery": {
+      "status": "not implemented in v1",
+      "unsupportedScenarios": [
+        "audio route changes",
+        "AirPlay or Bluetooth changes",
+        "HAL service restart",
+        "automatic rebuild after Music.app PID replacement"
+      ],
+      "currentBehavior": "capture becomes unavailable; toggling waveform off and on or changing panel capture conditions retries"
+    }
+  },
+  "provisionalBackend": "Apple Events",
+  "gate": "M0 passed; proceed to M1."
+}

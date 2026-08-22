@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "LyricsCore",
     platforms: [
-        .macOS(.v14)
+        .macOS("14.2")
     ],
     products: [
         .library(

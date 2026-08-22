@@ -15,6 +15,7 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var lastObservationError: String?
     @Published private(set) var lastArtworkError: String?
     @Published private(set) var trackArtwork: NSImage?
+    @Published private(set) var waveformState: WaveformCaptureState = .disabled
     @Published var isLyricsVisible = false
     @Published var settings: DynasicSettings {
         didSet {
@@ -25,6 +26,10 @@ final class DynasicAppState: ObservableObject {
             if settings.isAlwaysOnTop != oldValue.isAlwaysOnTop {
                 panelController?.setAlwaysOnTop(settings.isAlwaysOnTop)
             }
+            if settings.isWaveformEnabled != oldValue.isWaveformEnabled
+                || settings.lyricsPanelLayout != oldValue.lyricsPanelLayout {
+                refreshWaveformCapture()
+            }
         }
     }
 
@@ -32,6 +37,7 @@ final class DynasicAppState: ObservableObject {
     private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
     private let artworkProvider: any AppleMusicArtworkProviding
+    private let waveformCoordinator: WaveformCoordinator
     private let updateScheduler = AppUpdateScheduler()
     private var artworkTrackIdentity: TrackIdentity?
     private var artworkCache: [TrackIdentity: NSImage] = [:]
@@ -46,10 +52,16 @@ final class DynasicAppState: ObservableObject {
         userDefaults: UserDefaults = .standard,
         musicBackend: any AppleMusicObservationBackend = AppleMusicObservationService(),
         artworkProvider: any AppleMusicArtworkProviding = AppleMusicArtworkService(),
+        waveformSource: any WaveformSource = AppleMusicProcessTapWaveformSource(),
+        waveformTimeSource: any MonotonicTimeSource = ContinuousClockTimeSource(),
         startImmediately: Bool = false
     ) {
         self.musicBackend = musicBackend
         self.artworkProvider = artworkProvider
+        waveformCoordinator = WaveformCoordinator(
+            source: waveformSource,
+            timeSource: waveformTimeSource
+        )
         let settingsStore = DynasicSettingsStore(userDefaults: userDefaults)
         self.settingsStore = settingsStore
         _settings = Published(initialValue: settingsStore.load())
@@ -63,6 +75,9 @@ final class DynasicAppState: ObservableObject {
             provider: provider,
             cache: LyricsCache()
         )
+        waveformCoordinator.onStateChange = { [weak self] state in
+            self?.waveformState = state
+        }
 
         if startImmediately {
             startObservation()
@@ -75,11 +90,13 @@ final class DynasicAppState: ObservableObject {
             panelController = LyricsPanelController(state: self)
         }
         panelController?.show()
+        refreshWaveformCapture()
     }
 
     func hideLyrics() {
         isLyricsVisible = false
         panelController?.hide()
+        refreshWaveformCapture()
     }
 
     func showMainWindow() {
@@ -100,6 +117,11 @@ final class DynasicAppState: ObservableObject {
 
     func stopObservation() {
         updateScheduler.stop()
+    }
+
+    func shutdown() async {
+        stopObservation()
+        await waveformCoordinator.shutdown()
     }
 
     var isObservationRunning: Bool {
@@ -144,13 +166,30 @@ final class DynasicAppState: ObservableObject {
             await coordinator.process(snapshot: snapshot)
             await refreshViewStateNow()
             updateArtwork(for: snapshot.track)
+            refreshWaveformCapture()
         } catch {
             musicBackendStatus = "unavailable"
             lastObservationError = String(describing: error)
             viewState = .musicUnavailable
             estimatedPlaybackPosition = nil
+            reportedPlaybackState = nil
             updateArtwork(for: nil)
+            refreshWaveformCapture()
         }
+    }
+
+    func refreshWaveformCapture() {
+        waveformCoordinator.reconcile(
+            enabled: settings.isWaveformEnabled,
+            panelVisible: panelController?.isVisible == true,
+            expandedLayout: settings.lyricsPanelLayout == .expanded,
+            collapsed: panelController?.isCollapsed == true,
+            playbackState: reportedPlaybackState
+        )
+    }
+
+    func waitForWaveformLifecycleForTesting() async {
+        await waveformCoordinator.waitForLifecycleForTesting()
     }
 
     private func updateArtwork(for track: TrackMetadata?) {
@@ -281,6 +320,8 @@ final class DynasicAppState: ObservableObject {
         alwaysOnTop: \(settings.isAlwaysOnTop)
         stickyToCorner: \(settings.isStickyToCorner)
         autoRotate: \(settings.isAutoRotateEnabled)
+        waveformEnabled: \(settings.isWaveformEnabled)
+        waveformState: \(String(describing: waveformState))
         panelFrame: \(panelController?.frameDescription ?? "not created")
 
         Network
@@ -333,6 +374,29 @@ final class DynasicAppState: ObservableObject {
     private func formatted(_ value: TimeInterval?) -> String {
         guard let value else { return "—" }
         return String(format: "%.2f s", value)
+    }
+
+    var waveformStatusText: String {
+        switch waveformState {
+        case .disabled:
+            return settings.isWaveformEnabled
+                ? "Waiting for Expanded lyrics playback."
+                : "Off"
+        case .starting:
+            return "Starting audio capture…"
+        case .running:
+            return "Capturing Apple Music audio."
+        case .paused:
+            return "Paused; the last waveform is retained."
+        case .unavailable(.permissionDenied):
+            return "Permission denied. Enable System Audio Recording for dynasic in System Settings, then turn waveform off and on to retry."
+        case .unavailable(.musicUnavailable):
+            return "Music.app unavailable."
+        case .unavailable(.unsupportedFormat):
+            return "The current Apple Music audio format is unsupported."
+        case let .unavailable(.captureFailed(message)):
+            return "Audio capture failed: \(message)"
+        }
     }
 
     private static var architecture: String {

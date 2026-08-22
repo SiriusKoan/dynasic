@@ -23,6 +23,7 @@
 		A10000010000000000000015 /* DynasicSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000015 /* DynasicSettings.swift */; };
 		A10000010000000000000016 /* AppUpdateScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000016 /* AppUpdateScheduler.swift */; };
 		A10000010000000000000019 /* AppleMusicArtworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000019 /* AppleMusicArtworkService.swift */; };
+		A10000010000000000000020 /* AppleMusicWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000110000000000000020 /* AppleMusicWaveform.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,8 @@
 		A10000110000000000000015 /* DynasicSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynasicSettings.swift; sourceTree = "<group>"; };
 		A10000110000000000000016 /* AppUpdateScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateScheduler.swift; sourceTree = "<group>"; };
 		A10000110000000000000019 /* AppleMusicArtworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicArtworkService.swift; sourceTree = "<group>"; };
+		A10000110000000000000020 /* AppleMusicWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicWaveform.swift; sourceTree = "<group>"; };
+		A10000110000000000000021 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000110000000000000003 /* dynasic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dynasic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000110000000000000004 /* dynasicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = dynasicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -73,6 +76,8 @@
 				A10000110000000000000011 /* AppleMusicObservationService.swift */,
 				A10000110000000000000019 /* AppleMusicArtworkService.swift */,
 				A10000110000000000000013 /* MainWindowController.swift */,
+				A10000110000000000000020 /* AppleMusicWaveform.swift */,
+				A10000110000000000000021 /* Info.plist */,
 				A10000110000000000000014 /* Assets.xcassets */,
 			);
 			path = DynasicApp;
@@ -177,7 +182,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */, A10000010000000000000003 /* AppState.swift in Sources */, A10000010000000000000015 /* DynasicSettings.swift in Sources */, A10000010000000000000016 /* AppUpdateScheduler.swift in Sources */, A10000010000000000000004 /* MenuBarView.swift in Sources */, A10000010000000000000007 /* LyricsPanelView.swift in Sources */, A10000010000000000000008 /* LyricsPanelController.swift in Sources */, A10000010000000000000010 /* AppleMusicObservationService.swift in Sources */, A10000010000000000000019 /* AppleMusicArtworkService.swift in Sources */, A10000010000000000000013 /* MainWindowController.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A10000210000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001 /* DynasicApp.swift in Sources */, A10000010000000000000003 /* AppState.swift in Sources */, A10000010000000000000015 /* DynasicSettings.swift in Sources */, A10000010000000000000016 /* AppUpdateScheduler.swift in Sources */, A10000010000000000000004 /* MenuBarView.swift in Sources */, A10000010000000000000007 /* LyricsPanelView.swift in Sources */, A10000010000000000000008 /* LyricsPanelController.swift in Sources */, A10000010000000000000010 /* AppleMusicObservationService.swift in Sources */, A10000010000000000000019 /* AppleMusicArtworkService.swift in Sources */, A10000010000000000000013 /* MainWindowController.swift in Sources */, A10000010000000000000020 /* AppleMusicWaveform.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		A10000210000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000002 /* DynasicSmokeTests.swift in Sources */, A10000010000000000000006 /* DynasicAppStateTests.swift in Sources */, A10000010000000000000009 /* LyricsPanelControllerTests.swift in Sources */, A10000010000000000000011 /* AppleMusicObservationServiceTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
@@ -211,7 +216,7 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -222,7 +227,7 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -233,14 +238,16 @@
 				ARCHS = arm64;
 				CODE_SIGNING_ALLOWED = NO;
 				ENABLE_TESTABILITY = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DynasicApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
 				INFOPLIST_KEY_CFBundleName = dynasic;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "dynasic reads Apple Music playback information to synchronize lyrics.";
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "dynasic captures Apple Music audio to display a real-time waveform.";
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasic;
 				PRODUCT_NAME = dynasic;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -253,14 +260,16 @@
 			buildSettings = {
 				ARCHS = arm64;
 				CODE_SIGNING_ALLOWED = NO;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = DynasicApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = dynasic;
 				INFOPLIST_KEY_CFBundleName = dynasic;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "dynasic reads Apple Music playback information to synchronize lyrics.";
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "dynasic captures Apple Music audio to display a real-time waveform.";
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasic;
 				PRODUCT_NAME = dynasic;
 				SWIFT_VERSION = 5.0;
@@ -274,7 +283,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasicTests;
 				PRODUCT_NAME = dynasicTests;
 				SWIFT_VERSION = 5.0;
@@ -289,7 +298,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.siriuskoan.dynasicTests;
 				PRODUCT_NAME = dynasicTests;
 				SWIFT_VERSION = 5.0;

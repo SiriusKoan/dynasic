@@ -1,8 +1,11 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class DynasicAppDelegate: NSObject, NSApplicationDelegate {
     var onReopen: (() -> Void)?
+    var onTerminationRequest: (() async -> Void)?
+    private var terminationTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         showMainWindowOnNextRunLoop()
@@ -34,6 +37,17 @@ final class DynasicAppDelegate: NSObject, NSApplicationDelegate {
         showMainWindowOnNextRunLoop()
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let onTerminationRequest else { return .terminateNow }
+        guard terminationTask == nil else { return .terminateLater }
+
+        terminationTask = Task { @MainActor in
+            await onTerminationRequest()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     private func showMainWindowOnNextRunLoop() {
         DispatchQueue.main.async { [weak self] in
             self?.onReopen?()
@@ -51,6 +65,9 @@ struct DynasicApp: App {
         _appState = StateObject(wrappedValue: state)
         appDelegate.onReopen = { [weak state] in
             state?.showMainWindow()
+        }
+        appDelegate.onTerminationRequest = { [weak state] in
+            await state?.shutdown()
         }
     }
 

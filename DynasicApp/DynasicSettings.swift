@@ -45,6 +45,7 @@ struct DynasicSettings: Equatable {
     var isAlwaysOnTop: Bool
     var isStickyToCorner: Bool
     var isAutoRotateEnabled: Bool
+    var isWaveformEnabled: Bool
 
     static let defaults = DynasicSettings(
         lyricsOffset: 0,
@@ -55,7 +56,8 @@ struct DynasicSettings: Equatable {
         isClickThrough: false,
         isAlwaysOnTop: true,
         isStickyToCorner: false,
-        isAutoRotateEnabled: true
+        isAutoRotateEnabled: true,
+        isWaveformEnabled: false
     )
 }
 
@@ -73,7 +75,8 @@ struct DynasicSettingsStore {
             Key.isClickThrough: DynasicSettings.defaults.isClickThrough,
             Key.isAlwaysOnTop: DynasicSettings.defaults.isAlwaysOnTop,
             Key.isStickyToCorner: DynasicSettings.defaults.isStickyToCorner,
-            Key.isAutoRotateEnabled: DynasicSettings.defaults.isAutoRotateEnabled
+            Key.isAutoRotateEnabled: DynasicSettings.defaults.isAutoRotateEnabled,
+            Key.isWaveformEnabled: DynasicSettings.defaults.isWaveformEnabled
         ])
     }
 
@@ -91,7 +94,8 @@ struct DynasicSettingsStore {
             isClickThrough: userDefaults.bool(forKey: Key.isClickThrough),
             isAlwaysOnTop: userDefaults.bool(forKey: Key.isAlwaysOnTop),
             isStickyToCorner: userDefaults.bool(forKey: Key.isStickyToCorner),
-            isAutoRotateEnabled: userDefaults.bool(forKey: Key.isAutoRotateEnabled)
+            isAutoRotateEnabled: userDefaults.bool(forKey: Key.isAutoRotateEnabled),
+            isWaveformEnabled: userDefaults.bool(forKey: Key.isWaveformEnabled)
         )
     }
 
@@ -105,6 +109,7 @@ struct DynasicSettingsStore {
         userDefaults.set(settings.isAlwaysOnTop, forKey: Key.isAlwaysOnTop)
         userDefaults.set(settings.isStickyToCorner, forKey: Key.isStickyToCorner)
         userDefaults.set(settings.isAutoRotateEnabled, forKey: Key.isAutoRotateEnabled)
+        userDefaults.set(settings.isWaveformEnabled, forKey: Key.isWaveformEnabled)
     }
 
     private enum Key {
@@ -117,5 +122,6 @@ struct DynasicSettingsStore {
         static let isAlwaysOnTop = "dynasic.settings.isAlwaysOnTop"
         static let isStickyToCorner = "dynasic.settings.isStickyToCorner"
         static let isAutoRotateEnabled = "dynasic.settings.isAutoRotateEnabled"
+        static let isWaveformEnabled = "dynasic.settings.isWaveformEnabled"
     }
 }

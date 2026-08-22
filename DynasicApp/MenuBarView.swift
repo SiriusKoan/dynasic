@@ -95,6 +95,13 @@ struct SettingsView: View {
                 Toggle("Sticky to corner", isOn: $state.settings.isStickyToCorner)
                 Toggle("Auto Rotate", isOn: $state.settings.isAutoRotateEnabled)
             }
+
+            Section("Waveform") {
+                Toggle("Show Apple Music waveform", isOn: $state.settings.isWaveformEnabled)
+                Text(state.waveformStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding()
         .frame(width: 360)
