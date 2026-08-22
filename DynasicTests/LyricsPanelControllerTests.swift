@@ -72,7 +72,7 @@ final class LyricsPanelControllerTests: XCTestCase {
         state.hideLyrics()
     }
 
-    func testPanelPersistsCompleteExpandedFrameAndRestoresItAfterCollapse() throws {
+    func testPanelPersistsAnchoredExpandedFrameAndRestoresItAfterCollapse() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let controller = LyricsPanelController(
             state: DynasicAppState(userDefaults: defaults),
@@ -83,9 +83,10 @@ final class LyricsPanelControllerTests: XCTestCase {
 
         controller.show()
         let panel = try XCTUnwrap(controller.panelForTesting)
-        let expectedFrame = NSRect(x: 140, y: 180, width: 520, height: 240)
-        panel.setFrame(expectedFrame, display: false)
+        let requestedFrame = NSRect(x: 140, y: 180, width: 520, height: 240)
+        panel.setFrame(requestedFrame, display: false)
         controller.finishUserMoveForTesting()
+        let expectedFrame = panel.frame
 
         controller.toggleCollapsed()
         XCTAssertTrue(controller.isCollapsed)
@@ -176,8 +177,10 @@ final class LyricsPanelControllerTests: XCTestCase {
 
     func testCollapsedMouseDragMovesWithoutExpanding() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isIconStickyToCorner = false
         let controller = LyricsPanelController(
-            state: DynasicAppState(userDefaults: defaults),
+            state: state,
             userDefaults: defaults,
             animationDuration: 0
         )
@@ -187,7 +190,9 @@ final class LyricsPanelControllerTests: XCTestCase {
         let expandedFrame = NSRect(x: 140, y: 180, width: 520, height: 240)
         panel.setFrame(expandedFrame, display: false)
         controller.finishUserMoveForTesting()
+        let anchoredExpandedFrame = panel.frame
         controller.toggleCollapsed()
+        let collapsedFrameOrigin = panel.frame.origin
 
         let startLocation = NSPoint(x: panel.frame.minX + 10, y: panel.frame.minY + 10)
         let endLocation = NSPoint(x: startLocation.x + 80, y: startLocation.y + 60)
@@ -199,15 +204,54 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(
             panel.frame.origin,
             NSPoint(
-                x: expandedFrame.minX + 80,
-                y: expandedFrame.maxY - LyricsPanelController.collapsedSize.height + 60
+                x: collapsedFrameOrigin.x + 80,
+                y: collapsedFrameOrigin.y + 60
             )
         )
 
         controller.toggleCollapsed()
         XCTAssertEqual(
             panel.frame,
-            expandedFrame.offsetBy(dx: 80, dy: 60)
+            anchoredExpandedFrame.offsetBy(dx: 80, dy: 60)
+        )
+    }
+
+    func testCollapsingPlacesIconAtNearestCorner() throws {
+        let visible = NSRect(x: 100, y: 200, width: 1_000, height: 800)
+        let frame = NSRect(x: 820, y: 760, width: 200, height: 100)
+
+        XCTAssertEqual(
+            LyricsPanelController.nearestCornerFrame(for: frame, in: visible),
+            NSRect(x: 1_060, y: 960, width: 40, height: 40)
+        )
+    }
+
+    func testCollapsedMouseDragSnapsToNearestCornerWhenEnabled() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        controller.toggleCollapsed()
+
+        let visible = try XCTUnwrap(NSScreen.main).visibleFrame
+        let draggedFrame = NSRect(
+            x: visible.midX - LyricsPanelController.collapsedSize.width / 2,
+            y: visible.midY - LyricsPanelController.collapsedSize.height / 2,
+            width: LyricsPanelController.collapsedSize.width,
+            height: LyricsPanelController.collapsedSize.height
+        )
+        panel.setFrame(draggedFrame, display: false)
+        controller.finishUserMoveForTesting()
+
+        XCTAssertEqual(
+            panel.frame,
+            LyricsPanelController.nearestCornerFrame(for: draggedFrame, in: visible)
         )
     }
 
@@ -235,7 +279,6 @@ final class LyricsPanelControllerTests: XCTestCase {
     func testStickyToEdgeAnchorRunsOnlyWhenUserMoveFinishes() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
-        state.settings.isStickyToCorner = true
         let controller = LyricsPanelController(
             state: state,
             userDefaults: defaults,
@@ -263,7 +306,6 @@ final class LyricsPanelControllerTests: XCTestCase {
     func testStickySnapStartsAfterMouseRelease() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
-        state.settings.isStickyToCorner = true
         let controller = LyricsPanelController(
             state: state,
             userDefaults: defaults,
@@ -328,7 +370,6 @@ final class LyricsPanelControllerTests: XCTestCase {
     func testEdgeMidpointsChooseOrientationAndCornersPreserveIt() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
-        state.settings.isStickyToCorner = true
         let controller = LyricsPanelController(
             state: state,
             userDefaults: defaults,
@@ -394,7 +435,6 @@ final class LyricsPanelControllerTests: XCTestCase {
     func testDisablingAutoRotatePreservesOrientationAndSize() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)
-        state.settings.isStickyToCorner = true
         state.settings.isAutoRotateEnabled = false
         let controller = LyricsPanelController(
             state: state,

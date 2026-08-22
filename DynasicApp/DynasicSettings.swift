@@ -43,7 +43,7 @@ struct DynasicSettings: Equatable {
     var lyricsPanelLayout: LyricsPanelLayout
     var isClickThrough: Bool
     var isAlwaysOnTop: Bool
-    var isStickyToCorner: Bool
+    var isIconStickyToCorner: Bool
     var isAutoRotateEnabled: Bool
     var isWaveformEnabled: Bool
 
@@ -55,7 +55,7 @@ struct DynasicSettings: Equatable {
         lyricsPanelLayout: .expanded,
         isClickThrough: false,
         isAlwaysOnTop: true,
-        isStickyToCorner: false,
+        isIconStickyToCorner: true,
         isAutoRotateEnabled: true,
         isWaveformEnabled: false
     )
@@ -74,7 +74,7 @@ struct DynasicSettingsStore {
             Key.lyricsPanelLayout: DynasicSettings.defaults.lyricsPanelLayout.rawValue,
             Key.isClickThrough: DynasicSettings.defaults.isClickThrough,
             Key.isAlwaysOnTop: DynasicSettings.defaults.isAlwaysOnTop,
-            Key.isStickyToCorner: DynasicSettings.defaults.isStickyToCorner,
+            Key.isIconStickyToCorner: DynasicSettings.defaults.isIconStickyToCorner,
             Key.isAutoRotateEnabled: DynasicSettings.defaults.isAutoRotateEnabled,
             Key.isWaveformEnabled: DynasicSettings.defaults.isWaveformEnabled
         ])
@@ -93,7 +93,7 @@ struct DynasicSettingsStore {
             ) ?? .expanded,
             isClickThrough: userDefaults.bool(forKey: Key.isClickThrough),
             isAlwaysOnTop: userDefaults.bool(forKey: Key.isAlwaysOnTop),
-            isStickyToCorner: userDefaults.bool(forKey: Key.isStickyToCorner),
+            isIconStickyToCorner: userDefaults.bool(forKey: Key.isIconStickyToCorner),
             isAutoRotateEnabled: userDefaults.bool(forKey: Key.isAutoRotateEnabled),
             isWaveformEnabled: userDefaults.bool(forKey: Key.isWaveformEnabled)
         )
@@ -107,7 +107,7 @@ struct DynasicSettingsStore {
         userDefaults.set(settings.lyricsPanelLayout.rawValue, forKey: Key.lyricsPanelLayout)
         userDefaults.set(settings.isClickThrough, forKey: Key.isClickThrough)
         userDefaults.set(settings.isAlwaysOnTop, forKey: Key.isAlwaysOnTop)
-        userDefaults.set(settings.isStickyToCorner, forKey: Key.isStickyToCorner)
+        userDefaults.set(settings.isIconStickyToCorner, forKey: Key.isIconStickyToCorner)
         userDefaults.set(settings.isAutoRotateEnabled, forKey: Key.isAutoRotateEnabled)
         userDefaults.set(settings.isWaveformEnabled, forKey: Key.isWaveformEnabled)
     }
@@ -120,7 +120,7 @@ struct DynasicSettingsStore {
         static let lyricsPanelLayout = "dynasic.settings.lyricsPanelLayout"
         static let isClickThrough = "dynasic.settings.isClickThrough"
         static let isAlwaysOnTop = "dynasic.settings.isAlwaysOnTop"
-        static let isStickyToCorner = "dynasic.settings.isStickyToCorner"
+        static let isIconStickyToCorner = "dynasic.settings.isIconStickyToCorner"
         static let isAutoRotateEnabled = "dynasic.settings.isAutoRotateEnabled"
         static let isWaveformEnabled = "dynasic.settings.isWaveformEnabled"
     }

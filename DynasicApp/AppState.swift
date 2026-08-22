@@ -309,7 +309,7 @@ final class DynasicAppState: ObservableObject {
         layout: \(settings.lyricsPanelLayout.rawValue)
         clickThrough: \(settings.isClickThrough)
         alwaysOnTop: \(settings.isAlwaysOnTop)
-        stickyToCorner: \(settings.isStickyToCorner)
+        iconStickyToCorner: \(settings.isIconStickyToCorner)
         autoRotate: \(settings.isAutoRotateEnabled)
         waveformEnabled: \(settings.isWaveformEnabled)
         waveformState: \(String(describing: waveformState))

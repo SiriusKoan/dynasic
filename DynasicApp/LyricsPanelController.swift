@@ -389,10 +389,8 @@ final class LyricsPanelController: ObservableObject {
         hideStandardWindowButtons(on: panel)
         panel.minSize = NSSize(width: 1, height: 1)
         let collapsedFrame = NSRect(
-            x: panel.frame.minX,
-            y: panel.frame.maxY - Self.collapsedSize.height,
-            width: Self.collapsedSize.width,
-            height: Self.collapsedSize.height
+            origin: nearestCollapsedFrame(for: panel.frame).origin,
+            size: Self.collapsedSize
         )
         collapsedFrameOrigin = collapsedFrame.origin
         panel.ignoresMouseEvents = false
@@ -469,8 +467,26 @@ final class LyricsPanelController: ObservableObject {
         guard let panel, frameMutationState == .idle else { return }
         stopMonitoringUserMoveEnd()
 
-        guard state.settings.isStickyToCorner else {
-            recordFinishedFrame(panel.frame)
+        guard !isCollapsed else {
+            guard state.settings.isIconStickyToCorner else {
+                recordFinishedFrame(panel.frame)
+                return
+            }
+
+            let target = nearestCollapsedFrame(for: panel.frame)
+            guard target != panel.frame else {
+                recordFinishedFrame(panel.frame)
+                return
+            }
+
+            animateFrame(
+                target,
+                on: panel,
+                duration: animationDuration * 2.25
+            ) { [weak self, weak panel] in
+                guard let self, let panel else { return }
+                self.recordFinishedFrame(panel.frame)
+            }
             return
         }
 
@@ -502,7 +518,6 @@ final class LyricsPanelController: ObservableObject {
 
     private func monitorUserMoveEnd() {
         guard !isCollapsed,
-              state.settings.isStickyToCorner,
               frameMutationState == .idle,
               moveEndMonitor == nil else { return }
 
@@ -552,6 +567,60 @@ final class LyricsPanelController: ObservableObject {
             return EdgeAnchorTarget(frame: frame, orientation: nil)
         }
         return nearest
+    }
+
+    private func nearestCollapsedFrame(for frame: NSRect) -> NSRect {
+        let candidates = NSScreen.screens.map { screen in
+            Self.nearestCornerFrame(for: frame, in: screen.visibleFrame)
+        }
+
+        guard let nearest = candidates.min(by: {
+            distanceSquared(from: frame.center, to: $0.center)
+                < distanceSquared(from: frame.center, to: $1.center)
+        }) else {
+            return NSRect(origin: frame.origin, size: Self.collapsedSize)
+        }
+        return nearest
+    }
+
+    static func nearestCornerFrame(for frame: NSRect, in visibleFrame: NSRect) -> NSRect {
+        let width = min(Self.collapsedSize.width, visibleFrame.width)
+        let height = min(Self.collapsedSize.height, visibleFrame.height)
+        let corners = [
+            NSRect(
+                x: visibleFrame.minX,
+                y: visibleFrame.minY,
+                width: width,
+                height: height
+            ),
+            NSRect(
+                x: visibleFrame.maxX - width,
+                y: visibleFrame.minY,
+                width: width,
+                height: height
+            ),
+            NSRect(
+                x: visibleFrame.minX,
+                y: visibleFrame.maxY - height,
+                width: width,
+                height: height
+            ),
+            NSRect(
+                x: visibleFrame.maxX - width,
+                y: visibleFrame.maxY - height,
+                width: width,
+                height: height
+            )
+        ]
+
+        return corners.min(by: {
+            let lhsDX = frame.midX - $0.midX
+            let lhsDY = frame.midY - $0.midY
+            let rhsDX = frame.midX - $1.midX
+            let rhsDY = frame.midY - $1.midY
+            return lhsDX * lhsDX + lhsDY * lhsDY
+                < rhsDX * rhsDX + rhsDY * rhsDY
+        }) ?? NSRect(origin: frame.origin, size: Self.collapsedSize)
     }
 
     static func edgeAnchorFrames(

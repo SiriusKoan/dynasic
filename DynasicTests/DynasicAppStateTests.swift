@@ -15,6 +15,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertFalse(state.isLyricsVisible)
         XCTAssertEqual(state.settings.lyricsOffset, 0)
         XCTAssertEqual(state.settings.lyricsPanelLayout, .expanded)
+        XCTAssertTrue(state.settings.isIconStickyToCorner)
         XCTAssertTrue(state.settings.isAutoRotateEnabled)
         XCTAssertFalse(state.settings.isWaveformEnabled)
         XCTAssertEqual(state.trackTitle, "Nothing Playing")
@@ -42,7 +43,7 @@ final class DynasicAppStateTests: XCTestCase {
         firstState.settings.lyricsPanelLayout = .lyricsOnly
         firstState.settings.isClickThrough = true
         firstState.settings.isAlwaysOnTop = false
-        firstState.settings.isStickyToCorner = true
+        firstState.settings.isIconStickyToCorner = false
         firstState.settings.isAutoRotateEnabled = false
         firstState.settings.isWaveformEnabled = true
 
@@ -55,7 +56,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(secondState.settings.lyricsPanelLayout, .lyricsOnly)
         XCTAssertTrue(secondState.settings.isClickThrough)
         XCTAssertFalse(secondState.settings.isAlwaysOnTop)
-        XCTAssertTrue(secondState.settings.isStickyToCorner)
+        XCTAssertFalse(secondState.settings.isIconStickyToCorner)
         XCTAssertFalse(secondState.settings.isAutoRotateEnabled)
         XCTAssertTrue(secondState.settings.isWaveformEnabled)
     }
