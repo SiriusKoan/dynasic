@@ -26,8 +26,7 @@ final class DynasicAppState: ObservableObject {
             if settings.isAlwaysOnTop != oldValue.isAlwaysOnTop {
                 panelController?.setAlwaysOnTop(settings.isAlwaysOnTop)
             }
-            if settings.isWaveformEnabled != oldValue.isWaveformEnabled
-                || settings.lyricsPanelLayout != oldValue.lyricsPanelLayout {
+            if settings.isWaveformEnabled != oldValue.isWaveformEnabled {
                 refreshWaveformCapture()
             }
         }
@@ -173,7 +172,6 @@ final class DynasicAppState: ObservableObject {
         waveformCoordinator.reconcile(
             enabled: settings.isWaveformEnabled,
             panelVisible: panelController?.isVisible == true,
-            expandedLayout: settings.lyricsPanelLayout == .expanded,
             collapsed: panelController?.isCollapsed == true,
             playbackState: reportedPlaybackState
         )
@@ -371,7 +369,7 @@ final class DynasicAppState: ObservableObject {
         switch waveformState {
         case .disabled:
             return settings.isWaveformEnabled
-                ? "Waiting for Expanded lyrics playback."
+                ? "Waiting for lyrics playback."
                 : "Off"
         case .starting:
             return "Starting audio capture…"

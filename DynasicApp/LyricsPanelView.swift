@@ -212,7 +212,17 @@ struct LyricsPanelView: View {
     }
 
     private var lyricsOnlyLayout: some View {
-        lyricsContent
+        VStack(spacing: 12) {
+            lyricsContent
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            if state.settings.isWaveformEnabled,
+               let frame = state.waveformState.frame {
+                WaveformView(frame: frame)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+            }
+        }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 

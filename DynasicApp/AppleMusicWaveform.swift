@@ -686,13 +686,11 @@ final class WaveformCoordinator {
     func reconcile(
         enabled: Bool,
         panelVisible: Bool,
-        expandedLayout: Bool,
         collapsed: Bool,
         playbackState: PlaybackState?
     ) {
         let shouldCapture = enabled
             && panelVisible
-            && expandedLayout
             && !collapsed
             && playbackState == .playing
 

@@ -200,6 +200,32 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(state.waveformState, .unavailable(.permissionDenied))
     }
 
+    func testLyricsOnlyLayoutStartsWaveformCapture() async {
+        let source = RecordingWaveformSource()
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-lyrics-only-waveform-\(UUID().uuidString)")!,
+            musicBackend: StubObservationBackend(
+                snapshot: PlaybackSnapshot(
+                    track: nil,
+                    state: .playing,
+                    position: 0,
+                    observedAt: ContinuousClock().now
+                )
+            ),
+            waveformSource: source
+        )
+        state.showLyrics()
+        state.settings.lyricsPanelLayout = .lyricsOnly
+        state.settings.isWaveformEnabled = true
+
+        await state.observeOnceForTesting()
+        await state.waitForWaveformLifecycleForTesting()
+
+        let startCount = await source.startCount()
+        XCTAssertEqual(startCount, 1)
+        state.hideLyrics()
+    }
+
     func testAvailableArtworkIsCachedByTrackIdentity() async throws {
         let firstTrack = TrackMetadata(
             title: "First Song",
@@ -246,7 +272,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: true,
             panelVisible: false,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .playing
         )
@@ -289,7 +314,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: true,
             panelVisible: true,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .paused
         )
@@ -309,7 +333,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: false,
             panelVisible: true,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .playing
         )
@@ -331,7 +354,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: true,
             panelVisible: true,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .paused
         )
@@ -340,7 +362,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: false,
             panelVisible: true,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .playing
         )
@@ -381,7 +402,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: true,
             panelVisible: true,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .paused
         )
@@ -415,7 +435,6 @@ final class WaveformCoordinatorTests: XCTestCase {
         coordinator.reconcile(
             enabled: true,
             panelVisible: true,
-            expandedLayout: true,
             collapsed: false,
             playbackState: .playing
         )
