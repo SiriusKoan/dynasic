@@ -25,29 +25,10 @@ final class DynasicAppStateTests: XCTestCase {
 
         state.showLyrics()
         XCTAssertTrue(state.isLyricsVisible)
+        XCTAssertTrue(state.panelControllerForTesting?.isVisible == true)
 
         state.hideLyrics()
         XCTAssertFalse(state.isLyricsVisible)
-    }
-
-    func testMainWindowUsesDynasicTitleAndCanBeShownAgain() throws {
-        let state = DynasicAppState()
-
-        state.showMainWindow()
-        let controller = try XCTUnwrap(state.mainWindowControllerForTesting)
-        let firstWindow = try XCTUnwrap(controller.window)
-
-        XCTAssertEqual(firstWindow.title, "dynasic")
-        XCTAssertTrue(firstWindow.styleMask.contains(.titled))
-        XCTAssertTrue(controller.isVisible)
-
-        firstWindow.performClose(nil)
-        XCTAssertFalse(controller.isVisible)
-        state.showMainWindow()
-
-        XCTAssertTrue(firstWindow === controller.window)
-        XCTAssertTrue(controller.isVisible)
-        controller.hide()
     }
 
     func testSettingsPersistAcrossStateInstances() {

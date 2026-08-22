@@ -3,38 +3,38 @@ import SwiftUI
 
 @MainActor
 final class DynasicAppDelegate: NSObject, NSApplicationDelegate {
-    var onReopen: (() -> Void)?
+    var onShowLyrics: (() -> Void)?
     var onTerminationRequest: (() async -> Void)?
     private var terminationTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        showMainWindowOnNextRunLoop()
+        showLyricsOnNextRunLoop()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        showMainWindowOnNextRunLoop()
+        showLyricsOnNextRunLoop()
     }
 
     func applicationShouldHandleReopen(
         _ sender: NSApplication,
         hasVisibleWindows flag: Bool
     ) -> Bool {
-        showMainWindowOnNextRunLoop()
+        showLyricsOnNextRunLoop()
         return true
     }
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
-        showMainWindowOnNextRunLoop()
+        showLyricsOnNextRunLoop()
         return true
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
-        showMainWindowOnNextRunLoop()
+        showLyricsOnNextRunLoop()
         sender.reply(toOpenOrPrint: .success)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        showMainWindowOnNextRunLoop()
+        showLyricsOnNextRunLoop()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -48,9 +48,9 @@ final class DynasicAppDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    private func showMainWindowOnNextRunLoop() {
+    private func showLyricsOnNextRunLoop() {
         DispatchQueue.main.async { [weak self] in
-            self?.onReopen?()
+            self?.onShowLyrics?()
         }
     }
 }
@@ -63,8 +63,8 @@ struct DynasicApp: App {
     init() {
         let state = DynasicAppState(startImmediately: true)
         _appState = StateObject(wrappedValue: state)
-        appDelegate.onReopen = { [weak state] in
-            state?.showMainWindow()
+        appDelegate.onShowLyrics = { [weak state] in
+            state?.showLyrics()
         }
         appDelegate.onTerminationRequest = { [weak state] in
             await state?.shutdown()

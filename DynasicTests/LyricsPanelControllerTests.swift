@@ -29,8 +29,9 @@ final class LyricsPanelControllerTests: XCTestCase {
     }
 
     func testPanelUsesRequiredWindowConfiguration() {
-        let state = DynasicAppState()
-        let controller = LyricsPanelController(state: state)
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        let controller = LyricsPanelController(state: state, userDefaults: defaults)
 
         controller.show()
         let panel = try! XCTUnwrap(controller.panelForTesting)

@@ -6,6 +6,7 @@ import LyricsCore
 struct LyricsPanelView: View {
     @ObservedObject var state: DynasicAppState
     @ObservedObject var controller: LyricsPanelController
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -27,6 +28,27 @@ struct LyricsPanelView: View {
                 regularLayout
                     .overlay(alignment: .topTrailing) {
                         HStack(spacing: 2) {
+                            Button {
+                                openWindow(id: "settings")
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(5)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Settings")
+
+                            Button {
+                                state.refreshViewState()
+                                openWindow(id: "diagnostics")
+                            } label: {
+                                Image(systemName: "stethoscope")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(5)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Diagnostics")
+
                             Button {
                                 controller.rotateContent()
                             } label: {
@@ -208,11 +230,17 @@ struct LyricsPanelView: View {
         VStack(alignment: horizontalAlignment, spacing: 6) {
             ForEach(lines.lines) { item in
                 lyricText(item)
-                    .transition(transition(for: item.role))
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        )
+                    )
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment)
-        .animation(.easeInOut(duration: 0.24), value: lines.id)
+        .clipped()
+        .animation(.easeOut(duration: 0.24), value: lines.id)
     }
 
     @ViewBuilder
@@ -229,17 +257,6 @@ struct LyricsPanelView: View {
                 .lineLimit(nil)
                 .multilineTextAlignment(textAlignment)
                 .frame(maxWidth: .infinity, alignment: alignment)
-        }
-    }
-
-    private func transition(for role: LyricsLinePresentation.Role) -> AnyTransition {
-        switch role {
-        case .previous:
-            return .move(edge: .top).combined(with: .opacity)
-        case .current:
-            return .opacity
-        case .next:
-            return .move(edge: .bottom).combined(with: .opacity)
         }
     }
 
