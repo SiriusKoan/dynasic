@@ -93,6 +93,10 @@ final class WaveformSpectrumAnalyzer {
         repeating: Float.zero,
         count: WaveformSpectrumProcessor.columnCount
     )
+    private var levels = Array(
+        repeating: Float.zero,
+        count: WaveformSpectrumProcessor.columnCount
+    )
 
     init?(sampleRate: Double) {
         guard sampleRate.isFinite,
@@ -172,10 +176,9 @@ final class WaveformSpectrumAnalyzer {
             }
         }
 
-        bandPowers = Array(
-            repeating: 0,
-            count: WaveformSpectrumProcessor.columnCount
-        )
+        for index in bandPowers.indices {
+            bandPowers[index] = 0
+        }
         let amplitudeScale = 2 / windowSum
         for fftIndex in 1..<Self.fftBinCount {
             let bandIndex = fftBandIndices[fftIndex]
@@ -184,10 +187,9 @@ final class WaveformSpectrumAnalyzer {
             bandPowers[bandIndex] += magnitude * magnitude
         }
 
-        var levels = Array(
-            repeating: Float.zero,
-            count: WaveformSpectrumProcessor.columnCount
-        )
+        for index in levels.indices {
+            levels[index] = 0
+        }
         for bandIndex in levels.indices where bandBinCounts[bandIndex] > 0 {
             let amplitude = sqrt(
                 bandPowers[bandIndex] / Float(bandBinCounts[bandIndex])
