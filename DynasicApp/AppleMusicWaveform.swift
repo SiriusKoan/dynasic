@@ -71,7 +71,7 @@ final class WaveformSampleRing: @unchecked Sendable {
 }
 
 final class WaveformSpectrumAnalyzer {
-    static let sampleCount = 4_096
+    static let sampleCount = 2_048
 
     private static let decibelFloor: Float = -72
     private static let fftBinCount = sampleCount / 2

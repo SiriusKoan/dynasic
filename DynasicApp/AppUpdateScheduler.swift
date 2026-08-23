@@ -8,8 +8,8 @@ final class AppUpdateScheduler {
     private var displayTask: Task<Void, Never>?
 
     init(
-        observationInterval: Duration = .milliseconds(300),
-        displayInterval: Duration = .milliseconds(50)
+        observationInterval: Duration = .seconds(1),
+        displayInterval: Duration = .milliseconds(100)
     ) {
         self.observationInterval = observationInterval
         self.displayInterval = displayInterval

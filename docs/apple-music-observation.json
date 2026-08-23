@@ -101,7 +101,7 @@
   },
   "waveform": {
     "backend": "Core Audio process tap",
-    "representation": "24-band real-time spectrum from 20 Hz to 20 kHz using a 4096-sample Hann-windowed FFT",
+    "representation": "24-band real-time spectrum from 20 Hz to 20 kHz using a 2048-sample Hann-windowed FFT",
     "amplitudeMapping": "mean FFT-bin power per logarithmic band, converted to dBFS and mapped from -72...0 dBFS to 0...1",
     "uiRateHz": 20,
     "automaticRecovery": {
