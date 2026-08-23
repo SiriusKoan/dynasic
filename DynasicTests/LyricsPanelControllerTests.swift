@@ -303,6 +303,26 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertEqual(panel.frame.maxY, visible.maxY, accuracy: 0.5)
     }
 
+    func testDisablingLyricsWindowStickyLeavesExpandedFrameFree() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isLyricsWindowStickyToEdges = false
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+
+        controller.show()
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        let freeFrame = NSRect(x: 240, y: 320, width: 480, height: 180)
+        panel.setFrame(freeFrame, display: false)
+
+        controller.finishUserMoveForTesting()
+
+        XCTAssertEqual(panel.frame, freeFrame)
+    }
+
     func testStickySnapStartsAfterMouseRelease() throws {
         let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
         let state = DynasicAppState(userDefaults: defaults)

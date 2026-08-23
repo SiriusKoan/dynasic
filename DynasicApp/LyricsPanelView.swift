@@ -83,10 +83,13 @@ struct LyricsPanelView: View {
 
     @ViewBuilder
     private var regularLayout: some View {
-        if state.settings.lyricsPanelLayout == .expanded {
+        switch state.settings.lyricsPanelLayout {
+        case .expanded:
             expandedLayout
-        } else {
+        case .lyricsOnly:
             lyricsOnlyLayout
+        case .songInfoOnly:
+            songInfoOnlyLayout
         }
     }
 
@@ -223,6 +226,11 @@ struct LyricsPanelView: View {
                     .frame(height: 28)
             }
         }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private var songInfoOnlyLayout: some View {
+        trackSummary
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 

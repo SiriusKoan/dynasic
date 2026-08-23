@@ -15,6 +15,7 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertFalse(state.isLyricsVisible)
         XCTAssertEqual(state.settings.lyricsOffset, 0)
         XCTAssertEqual(state.settings.lyricsPanelLayout, .expanded)
+        XCTAssertTrue(state.settings.isLyricsWindowStickyToEdges)
         XCTAssertTrue(state.settings.isIconStickyToCorner)
         XCTAssertTrue(state.settings.isAutoRotateEnabled)
         XCTAssertFalse(state.settings.isWaveformEnabled)
@@ -43,6 +44,7 @@ final class DynasicAppStateTests: XCTestCase {
         firstState.settings.lyricsPanelLayout = .lyricsOnly
         firstState.settings.isClickThrough = true
         firstState.settings.isAlwaysOnTop = false
+        firstState.settings.isLyricsWindowStickyToEdges = false
         firstState.settings.isIconStickyToCorner = false
         firstState.settings.isAutoRotateEnabled = false
         firstState.settings.isWaveformEnabled = true
@@ -56,9 +58,24 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(secondState.settings.lyricsPanelLayout, .lyricsOnly)
         XCTAssertTrue(secondState.settings.isClickThrough)
         XCTAssertFalse(secondState.settings.isAlwaysOnTop)
+        XCTAssertFalse(secondState.settings.isLyricsWindowStickyToEdges)
         XCTAssertFalse(secondState.settings.isIconStickyToCorner)
         XCTAssertFalse(secondState.settings.isAutoRotateEnabled)
         XCTAssertTrue(secondState.settings.isWaveformEnabled)
+    }
+
+    func testSongInfoOnlyLayoutIsPersistedAndPresented() {
+        XCTAssertEqual(LyricsPanelLayout.songInfoOnly.rawValue, "song-info-only")
+        XCTAssertEqual(LyricsPanelLayout.songInfoOnly.title, "Song Info Only")
+        XCTAssertTrue(LyricsPanelLayout.allCases.contains(.songInfoOnly))
+
+        let defaults = UserDefaults(suiteName: "dynasic-song-info-only-\(UUID().uuidString)")!
+        let firstState = DynasicAppState(userDefaults: defaults)
+        firstState.settings.lyricsPanelLayout = .songInfoOnly
+
+        let secondState = DynasicAppState(userDefaults: defaults)
+
+        XCTAssertEqual(secondState.settings.lyricsPanelLayout, .songInfoOnly)
     }
 
     func testDiagnosticsTextContainsStableSections() {

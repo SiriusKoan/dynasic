@@ -88,6 +88,10 @@ struct SettingsView: View {
             Section("Panel") {
                 Toggle("Click-through", isOn: $state.settings.isClickThrough)
                 Toggle("Always on top", isOn: $state.settings.isAlwaysOnTop)
+                Toggle(
+                    "Sticky lyrics window to corners and edge centers",
+                    isOn: $state.settings.isLyricsWindowStickyToEdges
+                )
                 Toggle("Sticky icon to corner", isOn: $state.settings.isIconStickyToCorner)
                 Toggle("Auto Rotate", isOn: $state.settings.isAutoRotateEnabled)
             }

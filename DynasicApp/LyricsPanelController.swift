@@ -490,6 +490,11 @@ final class LyricsPanelController: ObservableObject {
             return
         }
 
+        guard state.settings.isLyricsWindowStickyToEdges else {
+            recordFinishedFrame(panel.frame)
+            return
+        }
+
         let target = nearestEdgeAnchorTarget(for: panel.frame)
         let changesOrientation = target.orientation.map { $0 != contentOrientation } == true
         if changesOrientation {
@@ -518,6 +523,7 @@ final class LyricsPanelController: ObservableObject {
 
     private func monitorUserMoveEnd() {
         guard !isCollapsed,
+              state.settings.isLyricsWindowStickyToEdges,
               frameMutationState == .idle,
               moveEndMonitor == nil else { return }
 
