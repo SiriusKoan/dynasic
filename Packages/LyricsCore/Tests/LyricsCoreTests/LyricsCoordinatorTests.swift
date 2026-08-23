@@ -264,6 +264,38 @@ func coordinatorRefreshesLyricSelectionFromLocalClock() async throws {
 }
 
 @Test
+func coordinatorReportsNextLyricChangePositionFromLocalClock() async throws {
+    let directory = try makeCoordinatorDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let fakeClock = CoordinatorFakeClock()
+    let provider = MockLyricsProvider()
+    let track = coordinatorTrack(title: "A")
+    let lyrics = Lyrics(lines: [
+        LyricLine(timestamp: 10, text: "A"),
+        LyricLine(timestamp: 20, text: "B"),
+        LyricLine(timestamp: 30, text: "C")
+    ])
+    await provider.setResult(.success(lyrics), for: track)
+    let coordinator = LyricsCoordinator(
+        provider: provider,
+        cache: LyricsCache(directory: directory),
+        playbackClock: PlaybackClock(timeSource: fakeClock)
+    )
+
+    await coordinator.process(snapshot: coordinatorSnapshot(track: track, position: 10))
+    #expect(await waitUntil {
+        if case let .displaying(_, _, currentIndex) = await coordinator.currentState() {
+            return currentIndex == 0
+        }
+        return false
+    })
+
+    #expect(await coordinator.nextLyricChangePosition() == 20)
+    fakeClock.advance(by: 10.1)
+    #expect(await coordinator.nextLyricChangePosition() == 30)
+}
+
+@Test
 func providerFailureIsRecoverableOnNextTrack() async throws {
     let directory = try makeCoordinatorDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }

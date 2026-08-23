@@ -71,6 +71,19 @@ public actor LyricsCoordinator {
         playbackClock.currentPosition()
     }
 
+    public func nextLyricChangePosition() -> TimeInterval? {
+        guard case let .displaying(_, lyrics, _) = state,
+              let position = playbackClock.currentPosition(),
+              position.isFinite else {
+            return nil
+        }
+
+        let offset = Double(lyrics.metadata.offsetMilliseconds ?? 0) / 1000
+        let adjustedPosition = position - offset
+        return lyrics.lines.first { $0.timestamp > adjustedPosition }
+            .map { $0.timestamp + offset }
+    }
+
     public func cancel() {
         clearActiveTrack()
         state = .idle
