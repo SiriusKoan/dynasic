@@ -28,6 +28,11 @@ func waveformSpectrumKeepsFrequencyBinsIndependent() {
 }
 
 @Test
+func waveformSpectrumUpdatesAtTenHertz() {
+    #expect(WaveformSpectrumProcessor.updateInterval == 0.1)
+}
+
+@Test
 func waveformAttackRisesFasterThanReleaseFalls() {
     let loud = WaveformBucket(levels: Array(repeating: 1, count: 24))
     let silent = WaveformBucket(levels: Array(repeating: 0, count: 24))

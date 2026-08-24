@@ -13,47 +13,112 @@ enum AppleMusicWaveformError: Error, Equatable {
 }
 
 final class WaveformSampleRing: @unchecked Sendable {
-    private static let usableCapacity: Int32 = 32_768
-    private static let storageCapacity = Int(usableCapacity + 1)
+    static let maximumBatchCount = 32_768
 
-    private let storage = UnsafeMutablePointer<Float>.allocate(capacity: storageCapacity)
-    private var readIndex: Int32 = 0
-    private var writeIndex: Int32 = 0
-
-    init() {
-        storage.initialize(repeating: 0, count: Self.storageCapacity)
-    }
+    private let storage = UnsafeMutablePointer<Float>.allocate(
+        capacity: WaveformSampleRing.maximumBatchCount
+    )
+    private var readIndex: Int64 = 0
+    private var writeIndex: Int64 = 0
 
     deinit {
-        storage.deinitialize(count: Self.storageCapacity)
         storage.deallocate()
     }
 
     func push(_ value: Float) {
-        let write = atomicLoad(&writeIndex)
-        let nextWrite = incremented(write)
+        var value = value
+        withUnsafePointer(to: &value) { pointer in
+            push(UnsafeBufferPointer(start: pointer, count: 1))
+        }
+    }
+
+    func push(_ samples: UnsafeBufferPointer<Float>) {
+        guard let source = samples.baseAddress, !samples.isEmpty else { return }
+
         let read = atomicLoad(&readIndex)
-        if nextWrite == read {
-            _ = OSAtomicCompareAndSwap32Barrier(read, incremented(read), &readIndex)
+        let write = atomicLoad(&writeIndex)
+        let unreadCount = min(
+            Int64(Self.maximumBatchCount),
+            max(0, write - read)
+        )
+        let freeCount = Int64(Self.maximumBatchCount) - unreadCount
+        let count = min(Int64(samples.count), freeCount)
+        guard count > 0 else { return }
+
+        // The producer never advances readIndex. If the consumer falls behind,
+        // retain unread samples and accept only the newest part that fits.
+        let sourceOffset = samples.count - Int(count)
+        let sourceSamples = source.advanced(by: sourceOffset)
+        let storageOffset = Int(write % Int64(Self.maximumBatchCount))
+        let firstCount = min(Int(count), Self.maximumBatchCount - storageOffset)
+        let byteCount = MemoryLayout<Float>.stride
+
+        memcpy(
+            storage.advanced(by: storageOffset),
+            sourceSamples,
+            firstCount * byteCount
+        )
+        if firstCount < Int(count) {
+            memcpy(
+                storage,
+                sourceSamples.advanced(by: firstCount),
+                (Int(count) - firstCount) * byteCount
+            )
         }
 
-        storage[Int(write)] = value
         OSMemoryBarrier()
-        _ = OSAtomicCompareAndSwap32Barrier(write, nextWrite, &writeIndex)
+        _ = OSAtomicCompareAndSwap64Barrier(
+            write,
+            write + count,
+            &writeIndex
+        )
     }
 
     func pop() -> Float? {
-        while true {
-            let read = atomicLoad(&readIndex)
-            let write = atomicLoad(&writeIndex)
-            guard read != write else { return nil }
-
-            OSMemoryBarrier()
-            let value = storage[Int(read)]
-            if OSAtomicCompareAndSwap32Barrier(read, incremented(read), &readIndex) {
-                return value
-            }
+        var value: Float = 0
+        let count = withUnsafeMutablePointer(to: &value) { pointer in
+            pop(into: UnsafeMutableBufferPointer(start: pointer, count: 1))
         }
+        return count == 1 ? value : nil
+    }
+
+    @discardableResult
+    func pop(into output: UnsafeMutableBufferPointer<Float>) -> Int {
+        guard let destination = output.baseAddress, !output.isEmpty else { return 0 }
+
+        let read = atomicLoad(&readIndex)
+        let write = atomicLoad(&writeIndex)
+        let availableCount = min(
+            Int64(Self.maximumBatchCount),
+            max(0, write - read)
+        )
+        let count = min(Int64(output.count), availableCount)
+        guard count > 0 else { return 0 }
+
+        let storageOffset = Int(read % Int64(Self.maximumBatchCount))
+        let firstCount = min(Int(count), Self.maximumBatchCount - storageOffset)
+        let byteCount = MemoryLayout<Float>.stride
+
+        memcpy(
+            destination,
+            storage.advanced(by: storageOffset),
+            firstCount * byteCount
+        )
+        if firstCount < Int(count) {
+            memcpy(
+                destination.advanced(by: firstCount),
+                storage,
+                (Int(count) - firstCount) * byteCount
+            )
+        }
+
+        OSMemoryBarrier()
+        _ = OSAtomicCompareAndSwap64Barrier(
+            read,
+            read + count,
+            &readIndex
+        )
+        return Int(count)
     }
 
     func clear() {
@@ -61,12 +126,8 @@ final class WaveformSampleRing: @unchecked Sendable {
         writeIndex = 0
     }
 
-    private func atomicLoad(_ value: inout Int32) -> Int32 {
-        OSAtomicAdd32Barrier(0, &value)
-    }
-
-    private func incremented(_ index: Int32) -> Int32 {
-        (index + 1) % Int32(Self.storageCapacity)
+    private func atomicLoad(_ value: inout Int64) -> Int64 {
+        OSAtomicAdd64Barrier(0, &value)
     }
 }
 
@@ -138,6 +199,12 @@ final class WaveformSpectrumAnalyzer {
         receivedSampleCount = min(receivedSampleCount + 1, Self.sampleCount)
     }
 
+    func append(_ samples: UnsafeBufferPointer<Float>) {
+        for sample in samples {
+            append(sample)
+        }
+    }
+
     func makeBucket() -> WaveformBucket? {
         guard receivedSampleCount == Self.sampleCount else { return nil }
 
@@ -180,11 +247,15 @@ final class WaveformSpectrumAnalyzer {
             bandPowers[index] = 0
         }
         let amplitudeScale = 2 / windowSum
+        let powerScale = amplitudeScale * amplitudeScale
         for fftIndex in 1..<Self.fftBinCount {
             let bandIndex = fftBandIndices[fftIndex]
             guard bandIndex >= 0 else { continue }
-            let magnitude = hypot(real[fftIndex], imaginary[fftIndex]) * amplitudeScale
-            bandPowers[bandIndex] += magnitude * magnitude
+            let realValue = real[fftIndex]
+            let imaginaryValue = imaginary[fftIndex]
+            bandPowers[bandIndex] += (
+                realValue * realValue + imaginaryValue * imaginaryValue
+            ) * powerScale
         }
 
         for index in levels.indices {
@@ -238,6 +309,7 @@ final class WaveformCaptureContext: @unchecked Sendable {
     private let sampleFormat: SampleFormat
     private let channelCount: Int
     private let isNonInterleaved: Bool
+    private let mixedSamples: UnsafeMutablePointer<Float>
     private var acceptsCallbacks: Int32 = 1
     private var activeCallbackCount: Int32 = 0
 
@@ -279,6 +351,13 @@ final class WaveformCaptureContext: @unchecked Sendable {
         self.ring = ring
         self.channelCount = channelCount
         self.isNonInterleaved = isNonInterleaved
+        self.mixedSamples = UnsafeMutablePointer.allocate(
+            capacity: WaveformSampleRing.maximumBatchCount
+        )
+    }
+
+    deinit {
+        mixedSamples.deallocate()
     }
 
     func consume(_ inputData: UnsafePointer<AudioBufferList>?) {
@@ -301,36 +380,64 @@ final class WaveformCaptureContext: @unchecked Sendable {
         }
         guard frameCount != Int.max, frameCount > 0 else { return }
 
-        for frameIndex in 0..<frameCount {
-            var frameTotal: Float = 0
-            var frameSamples = 0
-            for buffer in buffers {
-                guard let data = buffer.mData else { continue }
-                let channelCount = Int(buffer.mNumberChannels)
-                guard channelCount > 0 else { continue }
-                let firstSample = frameIndex * channelCount
+        if case .float32 = sampleFormat,
+           buffers.count == 1,
+           buffers[0].mNumberChannels == 1,
+           let data = buffers[0].mData {
+            // process tap 已要求 mono mixdown，Float32 單聲道可直接寫入 ring buffer。
+            ring.push(
+                UnsafeBufferPointer(
+                    start: data.assumingMemoryBound(to: Float.self),
+                    count: frameCount
+                )
+            )
+            return
+        }
 
-                switch sampleFormat {
-                case .float32:
-                    let samples = data.assumingMemoryBound(to: Float.self)
-                    for channel in 0..<channelCount {
-                        let sample = samples[firstSample + channel]
-                        let bounded = sample.isFinite ? min(max(sample, -1), 1) : 0
-                        frameTotal += bounded
-                        frameSamples += 1
-                    }
-                case .int16:
-                    let samples = data.assumingMemoryBound(to: Int16.self)
-                    for channel in 0..<channelCount {
-                        let normalized = Float(samples[firstSample + channel]) / 32_768
-                        frameTotal += normalized
-                        frameSamples += 1
+        var batchStart = 0
+        while batchStart < frameCount {
+            let batchCount = min(
+                frameCount - batchStart,
+                WaveformSampleRing.maximumBatchCount
+            )
+            for batchIndex in 0..<batchCount {
+                let frameIndex = batchStart + batchIndex
+                var frameTotal: Float = 0
+                var frameSamples = 0
+                for buffer in buffers {
+                    guard let data = buffer.mData else { continue }
+                    let channelCount = Int(buffer.mNumberChannels)
+                    guard channelCount > 0 else { continue }
+                    let firstSample = frameIndex * channelCount
+
+                    switch sampleFormat {
+                    case .float32:
+                        let samples = data.assumingMemoryBound(to: Float.self)
+                        for channel in 0..<channelCount {
+                            let sample = samples[firstSample + channel]
+                            let bounded = sample.isFinite ? min(max(sample, -1), 1) : 0
+                            frameTotal += bounded
+                            frameSamples += 1
+                        }
+                    case .int16:
+                        let samples = data.assumingMemoryBound(to: Int16.self)
+                        for channel in 0..<channelCount {
+                            let normalized = Float(samples[firstSample + channel]) / 32_768
+                            frameTotal += normalized
+                            frameSamples += 1
+                        }
                     }
                 }
+
+                mixedSamples[batchIndex] = frameSamples > 0
+                    ? frameTotal / Float(frameSamples)
+                    : 0
             }
 
-            guard frameSamples > 0 else { continue }
-            ring.push(frameTotal / Float(frameSamples))
+            ring.push(
+                UnsafeBufferPointer(start: mixedSamples, count: batchCount)
+            )
+            batchStart += batchCount
         }
     }
 
@@ -346,6 +453,7 @@ final class WaveformCaptureContext: @unchecked Sendable {
 }
 
 final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Sendable {
+    private static let preferredBufferFrameCount: UInt32 = 2_048
     private let controlQueue = DispatchQueue(label: "dynasic.waveform.control")
     private let deliveryQueue = DispatchQueue(label: "dynasic.waveform.delivery")
 
@@ -435,6 +543,7 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
                 ),
                 operation: "create aggregate device"
             )
+            configurePreferredBufferFrameCount(aggregateDeviceID)
 
             let stream = AsyncStream<WaveformBucket>(bufferingPolicy: .bufferingNewest(64)) {
                 self.continuation = $0
@@ -463,6 +572,26 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
             stopSynchronously()
             throw cleanupError ?? startupError
         }
+    }
+
+    private func configurePreferredBufferFrameCount(_ deviceID: AudioObjectID) {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyBufferFrameSize,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var frameCount = Self.preferredBufferFrameCount
+
+        // 較大的 callback 區塊可降低 IO callback 排程與 ring buffer 發布次數。
+        // 私有 aggregate device 不支援設定時，保留 Core Audio 的預設值。
+        _ = AudioObjectSetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            UInt32(MemoryLayout<UInt32>.size),
+            &frameCount
+        )
     }
 
     private func stopSynchronously() {
@@ -534,14 +663,24 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
         analyzer: WaveformSpectrumAnalyzer
     ) {
         let timer = DispatchSource.makeTimerSource(queue: deliveryQueue)
+        var samples = Array(
+            repeating: Float.zero,
+            count: WaveformSampleRing.maximumBatchCount
+        )
         var emptyDeliveryCount = 0
-        timer.schedule(deadline: .now(), repeating: .milliseconds(50), leeway: .milliseconds(5))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(100), leeway: .milliseconds(10))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             var receivedSamples = false
-            while let sample = ring.pop() {
-                analyzer.append(sample)
-                receivedSamples = true
+            samples.withUnsafeMutableBufferPointer { buffer in
+                while true {
+                    let count = ring.pop(into: buffer)
+                    guard count > 0 else { break }
+                    analyzer.append(
+                        UnsafeBufferPointer(start: buffer.baseAddress, count: count)
+                    )
+                    receivedSamples = true
+                }
             }
 
             if receivedSamples {

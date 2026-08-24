@@ -465,7 +465,7 @@ final class WaveformCoordinatorTests: XCTestCase {
 }
 
 final class WaveformAudioBufferTests: XCTestCase {
-    func testRingBufferDropsOldestSamplesWhenFull() throws {
+    func testRingBufferRetainsUnreadSamplesWhenFull() throws {
         let ring = WaveformSampleRing()
         for value in 0..<32_774 {
             ring.push(Float(value))
@@ -477,8 +477,49 @@ final class WaveformAudioBufferTests: XCTestCase {
         }
 
         XCTAssertEqual(values.count, 32_768)
-        XCTAssertEqual(values.first, 6)
-        XCTAssertEqual(values.last, 32_773)
+        XCTAssertEqual(values.first, 0)
+        XCTAssertEqual(values.last, 32_767)
+    }
+
+    func testRingBufferPopsAWholeBatchInOrder() throws {
+        let ring = WaveformSampleRing()
+        let input = (0..<128).map(Float.init)
+        var output = Array(repeating: Float.zero, count: input.count)
+
+        input.withUnsafeBufferPointer { inputBuffer in
+            ring.push(inputBuffer)
+        }
+        let count = output.withUnsafeMutableBufferPointer { outputBuffer in
+            ring.pop(into: outputBuffer)
+        }
+
+        XCTAssertEqual(count, input.count)
+        XCTAssertEqual(output, input)
+    }
+
+    func testRingBufferBatchOperationsPreserveOrderAcrossWrap() throws {
+        let ring = WaveformSampleRing()
+        let initial = (0..<WaveformSampleRing.maximumBatchCount).map(Float.init)
+        let discardedCount = 256
+        let appended = (10_000..<10_512).map(Float.init)
+
+        initial.withUnsafeBufferPointer { ring.push($0) }
+
+        var discarded = Array(repeating: Float.zero, count: discardedCount)
+        _ = discarded.withUnsafeMutableBufferPointer { ring.pop(into: $0) }
+
+        appended.withUnsafeBufferPointer { ring.push($0) }
+
+        var output = Array(
+            repeating: Float.zero,
+            count: WaveformSampleRing.maximumBatchCount
+        )
+        let count = output.withUnsafeMutableBufferPointer { ring.pop(into: $0) }
+
+        let expected = Array(initial.dropFirst(discardedCount))
+            + Array(appended.suffix(discardedCount))
+        XCTAssertEqual(count, expected.count)
+        XCTAssertEqual(output, expected)
     }
 
     func testFloat32InterleavedPCMProducesMonoSamples() throws {
@@ -502,6 +543,38 @@ final class WaveformAudioBufferTests: XCTestCase {
         }
 
         XCTAssertEqual(ring.pop() ?? -1, 0, accuracy: 0.0001)
+    }
+
+    func testFloat32MonoPCMUsesSamplesDirectly() throws {
+        let ring = WaveformSampleRing()
+        let context = try WaveformCaptureContext(
+            format: audioFormat(
+                flags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+                bytesPerFrame: 4,
+                channelsPerFrame: 1
+            ),
+            ring: ring
+        )
+        var samples: [Float] = [0.25, -0.5]
+
+        samples.withUnsafeMutableBytes { bytes in
+            var list = AudioBufferList(
+                mNumberBuffers: 1,
+                mBuffers: AudioBuffer(
+                    mNumberChannels: 1,
+                    mDataByteSize: UInt32(bytes.count),
+                    mData: bytes.baseAddress
+                )
+            )
+            withUnsafePointer(to: &list) { context.consume($0) }
+        }
+
+        var output = Array(repeating: Float.zero, count: samples.count)
+        let count = output.withUnsafeMutableBufferPointer { buffer in
+            ring.pop(into: buffer)
+        }
+        XCTAssertEqual(count, samples.count)
+        XCTAssertEqual(output, samples)
     }
 
     func testInt16NonInterleavedPCMProducesMonoSamples() throws {
@@ -638,6 +711,7 @@ final class WaveformAudioBufferTests: XCTestCase {
         flags: AudioFormatFlags,
         bitsPerChannel: UInt32 = 32,
         bytesPerFrame: UInt32 = 8,
+        channelsPerFrame: UInt32 = 2,
         nonInterleaved: Bool = false
     ) -> AudioStreamBasicDescription {
         AudioStreamBasicDescription(
@@ -647,7 +721,7 @@ final class WaveformAudioBufferTests: XCTestCase {
             mBytesPerPacket: bytesPerFrame,
             mFramesPerPacket: 1,
             mBytesPerFrame: bytesPerFrame,
-            mChannelsPerFrame: 2,
+            mChannelsPerFrame: channelsPerFrame,
             mBitsPerChannel: bitsPerChannel,
             mReserved: 0
         )

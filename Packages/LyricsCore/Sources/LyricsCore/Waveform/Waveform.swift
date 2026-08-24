@@ -60,7 +60,7 @@ public protocol WaveformSource: Sendable {
 
 public struct WaveformSpectrumProcessor: Sendable {
     public static let columnCount = WaveformFrame.levelCount
-    public static let updateInterval: TimeInterval = 0.05
+    public static let updateInterval: TimeInterval = 0.1
     public static let minimumFrequency: Float = 20
     public static let maximumFrequency: Float = 20_000
 
