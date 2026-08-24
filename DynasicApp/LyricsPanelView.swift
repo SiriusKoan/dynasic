@@ -26,6 +26,17 @@ struct LyricsPanelView: View {
                 .accessibilityLabel("Expand lyrics")
             } else {
                 regularLayout
+                    .overlay(alignment: .topLeading) {
+                        Button {
+                            NSApplication.shared.terminate(nil)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption.weight(.semibold))
+                                .padding(5)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Quit dynasic")
+                    }
                     .overlay(alignment: .topTrailing) {
                         HStack(spacing: 2) {
                             Button {
