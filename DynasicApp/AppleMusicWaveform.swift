@@ -171,17 +171,6 @@ final class WaveformSampleRing: @unchecked Sendable {
     }
 }
 
-struct WaveformDeliveryCadence {
-    static let fftEveryDisplayFrame = 2
-
-    private var displayFrameIndex = 0
-
-    mutating func shouldCalculateFFT() -> Bool {
-        defer { displayFrameIndex += 1 }
-        return displayFrameIndex.isMultiple(of: Self.fftEveryDisplayFrame)
-    }
-}
-
 final class WaveformSpectrumAnalyzer {
     static let sampleCount = 2_048
 
@@ -719,8 +708,6 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
             count: WaveformSpectrumAnalyzer.sampleCount
         )
         var emptyDeliveryCount = 0
-        var cadence = WaveformDeliveryCadence()
-        var lastBucket: WaveformBucket?
         timer.schedule(deadline: .now(), repeating: .milliseconds(100), leeway: .milliseconds(10))
         timer.setEventHandler { [weak self] in
             guard let self else { return }
@@ -736,13 +723,7 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
 
             if receivedSamples {
                 emptyDeliveryCount = 0
-                if cadence.shouldCalculateFFT(),
-                   let bucket = analyzer.makeBucket() {
-                    lastBucket = bucket
-                }
-                // FFT 每 200 ms 執行一次，中間的顯示週期重用上一個 bucket；
-                // WaveformSpectrumProcessor 仍以 10 Hz 進行平滑更新。
-                if let bucket = lastBucket {
+                if let bucket = analyzer.makeBucket() {
                     _ = self.continuation?.yield(bucket)
                 }
             } else {
