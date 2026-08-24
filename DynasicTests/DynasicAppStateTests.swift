@@ -522,6 +522,28 @@ final class WaveformAudioBufferTests: XCTestCase {
         XCTAssertEqual(output, expected)
     }
 
+    func testRingBufferPopsLatestBatchAcrossWrap() throws {
+        let ring = WaveformSampleRing()
+        let initial = (0..<WaveformSampleRing.maximumBatchCount).map(Float.init)
+        let discardedCount = 256
+        let appended = (10_000..<10_512).map(Float.init)
+
+        initial.withUnsafeBufferPointer { ring.push($0) }
+
+        var discarded = Array(repeating: Float.zero, count: discardedCount)
+        _ = discarded.withUnsafeMutableBufferPointer { ring.pop(into: $0) }
+
+        appended.withUnsafeBufferPointer { ring.push($0) }
+
+        var output = Array(repeating: Float.zero, count: 1_024)
+        let count = output.withUnsafeMutableBufferPointer { ring.popLatest(into: $0) }
+
+        let expected = Array(initial.suffix(768)) + Array(appended.suffix(256))
+        XCTAssertEqual(count, expected.count)
+        XCTAssertEqual(output, expected)
+        XCTAssertNil(ring.pop())
+    }
+
     func testFloat32InterleavedPCMProducesMonoSamples() throws {
         let ring = WaveformSampleRing()
         let context = try WaveformCaptureContext(
