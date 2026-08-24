@@ -465,6 +465,14 @@ final class WaveformCoordinatorTests: XCTestCase {
 }
 
 final class WaveformAudioBufferTests: XCTestCase {
+    func testWaveformDeliveryCadenceCalculatesFFTEveryOtherDisplayFrame() {
+        var cadence = WaveformDeliveryCadence()
+
+        let decisions = (0..<6).map { _ in cadence.shouldCalculateFFT() }
+
+        XCTAssertEqual(decisions, [true, false, true, false, true, false])
+    }
+
     func testRingBufferRetainsUnreadSamplesWhenFull() throws {
         let ring = WaveformSampleRing()
         for value in 0..<32_774 {
