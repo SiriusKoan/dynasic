@@ -121,6 +121,46 @@ final class WaveformSampleRing: @unchecked Sendable {
         return Int(count)
     }
 
+    @discardableResult
+    func popLatest(into output: UnsafeMutableBufferPointer<Float>) -> Int {
+        guard let destination = output.baseAddress, !output.isEmpty else { return 0 }
+
+        let read = atomicLoad(&readIndex)
+        let write = atomicLoad(&writeIndex)
+        let availableCount = min(
+            Int64(Self.maximumBatchCount),
+            max(0, write - read)
+        )
+        let count = min(Int64(output.count), availableCount)
+        guard count > 0 else { return 0 }
+
+        let latestRead = write - count
+        let storageOffset = Int(latestRead % Int64(Self.maximumBatchCount))
+        let firstCount = min(Int(count), Self.maximumBatchCount - storageOffset)
+        let byteCount = MemoryLayout<Float>.stride
+
+        memcpy(
+            destination,
+            storage.advanced(by: storageOffset),
+            firstCount * byteCount
+        )
+        if firstCount < Int(count) {
+            memcpy(
+                destination.advanced(by: firstCount),
+                storage,
+                (Int(count) - firstCount) * byteCount
+            )
+        }
+
+        OSMemoryBarrier()
+        _ = OSAtomicCompareAndSwap64Barrier(
+            read,
+            write,
+            &readIndex
+        )
+        return Int(count)
+    }
+
     func clear() {
         readIndex = 0
         writeIndex = 0
@@ -665,7 +705,7 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
         let timer = DispatchSource.makeTimerSource(queue: deliveryQueue)
         var samples = Array(
             repeating: Float.zero,
-            count: WaveformSampleRing.maximumBatchCount
+            count: WaveformSpectrumAnalyzer.sampleCount
         )
         var emptyDeliveryCount = 0
         timer.schedule(deadline: .now(), repeating: .milliseconds(100), leeway: .milliseconds(10))
@@ -673,14 +713,12 @@ final class AppleMusicProcessTapWaveformSource: WaveformSource, @unchecked Senda
             guard let self else { return }
             var receivedSamples = false
             samples.withUnsafeMutableBufferPointer { buffer in
-                while true {
-                    let count = ring.pop(into: buffer)
-                    guard count > 0 else { break }
-                    analyzer.append(
-                        UnsafeBufferPointer(start: buffer.baseAddress, count: count)
-                    )
-                    receivedSamples = true
-                }
+                let count = ring.popLatest(into: buffer)
+                guard count > 0 else { return }
+                analyzer.append(
+                    UnsafeBufferPointer(start: buffer.baseAddress, count: count)
+                )
+                receivedSamples = true
             }
 
             if receivedSamples {
