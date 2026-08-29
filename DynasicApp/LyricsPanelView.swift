@@ -165,9 +165,8 @@ struct LyricsPanelView: View {
                 }
             }
 
-            if state.settings.isWaveformEnabled,
-               let frame = state.waveformState.frame {
-                WaveformView(frame: frame)
+            if state.settings.isWaveformEnabled {
+                WaveformPresentationView(presentation: state.waveformPresentation)
                     .frame(height: 28)
             }
 
@@ -230,9 +229,8 @@ struct LyricsPanelView: View {
             lyricsContent
                 .frame(maxWidth: .infinity, alignment: .center)
 
-            if state.settings.isWaveformEnabled,
-               let frame = state.waveformState.frame {
-                WaveformView(frame: frame)
+            if state.settings.isWaveformEnabled {
+                WaveformPresentationView(presentation: state.waveformPresentation)
                     .frame(maxWidth: .infinity)
                     .frame(height: 28)
             }
@@ -333,26 +331,45 @@ struct LyricsPanelView: View {
     }
 }
 
+private struct WaveformPresentationView: View {
+    @ObservedObject var presentation: WaveformPresentation
+
+    @ViewBuilder
+    var body: some View {
+        if let frame = presentation.state.frame {
+            WaveformView(frame: frame)
+        }
+    }
+}
+
 private struct WaveformView: View {
     let frame: WaveformFrame
 
     var body: some View {
-        GeometryReader { proxy in
+        Canvas { context, size in
             let spacing: CGFloat = 2
-            let count = CGFloat(WaveformSpectrumProcessor.columnCount)
-            let barWidth = max(1, (proxy.size.width - spacing * (count - 1)) / count)
+            let levelCount = min(
+                frame.levels.count,
+                WaveformSpectrumProcessor.columnCount
+            )
+            guard levelCount > 0 else { return }
 
-            HStack(alignment: .center, spacing: spacing) {
-                ForEach(Array(frame.levels.prefix(WaveformSpectrumProcessor.columnCount).enumerated()), id: \.offset) { _, level in
-                    Capsule()
-                        .frame(
-                            width: barWidth,
-                            height: max(2, proxy.size.height * CGFloat(min(max(level, 0), 1)))
-                        )
-                }
+            let count = CGFloat(levelCount)
+            let barWidth = max(1, (size.width - spacing * (count - 1)) / count)
+            for index in 0..<levelCount {
+                let level = CGFloat(min(max(frame.levels[index], 0), 1))
+                let height = max(2, size.height * level)
+                let rect = CGRect(
+                    x: CGFloat(index) * (barWidth + spacing),
+                    y: (size.height - height) / 2,
+                    width: barWidth,
+                    height: height
+                )
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: min(barWidth, height) / 2),
+                    with: .color(.primary.opacity(0.72))
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .foregroundStyle(.primary.opacity(0.72))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Apple Music frequency spectrum")

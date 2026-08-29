@@ -98,13 +98,25 @@ struct SettingsView: View {
 
             Section("Waveform") {
                 Toggle("Show Apple Music waveform", isOn: $state.settings.isWaveformEnabled)
-                Text(state.waveformStatusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                WaveformStatusView(
+                    state: state,
+                    presentation: state.waveformPresentation
+                )
             }
         }
         .padding()
         .frame(width: 360)
+    }
+}
+
+private struct WaveformStatusView: View {
+    let state: DynasicAppState
+    @ObservedObject var presentation: WaveformPresentation
+
+    var body: some View {
+        Text(state.waveformStatusText)
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 }
 

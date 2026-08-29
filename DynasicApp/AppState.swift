@@ -4,6 +4,16 @@ import Combine
 import LyricsCore
 
 @MainActor
+final class WaveformPresentation: ObservableObject {
+    @Published private(set) var state: WaveformCaptureState = .disabled
+
+    func update(_ state: WaveformCaptureState) {
+        guard self.state != state else { return }
+        self.state = state
+    }
+}
+
+@MainActor
 final class DynasicAppState: ObservableObject {
     @Published private(set) var viewState: LyricsViewState = .idle
     @Published private(set) var estimatedPlaybackPosition: TimeInterval?
@@ -15,7 +25,6 @@ final class DynasicAppState: ObservableObject {
     @Published private(set) var lastObservationError: String?
     @Published private(set) var lastArtworkError: String?
     @Published private(set) var trackArtwork: NSImage?
-    @Published private(set) var waveformState: WaveformCaptureState = .disabled
     @Published var isLyricsVisible = false
     @Published var settings: DynasicSettings {
         didSet {
@@ -33,6 +42,7 @@ final class DynasicAppState: ObservableObject {
     }
 
     let coordinator: LyricsCoordinator
+    let waveformPresentation = WaveformPresentation()
     private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
     private let artworkProvider: any AppleMusicArtworkProviding
@@ -47,6 +57,7 @@ final class DynasicAppState: ObservableObject {
     private static let minimumLyricRefreshMilliseconds: Int64 = 10
 
     var panelControllerForTesting: LyricsPanelController? { panelController }
+    var waveformState: WaveformCaptureState { waveformPresentation.state }
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -76,7 +87,7 @@ final class DynasicAppState: ObservableObject {
             cache: LyricsCache()
         )
         waveformCoordinator.onStateChange = { [weak self] state in
-            self?.waveformState = state
+            self?.waveformPresentation.update(state)
         }
 
         if startImmediately {

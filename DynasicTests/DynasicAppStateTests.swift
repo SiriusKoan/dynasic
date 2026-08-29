@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreAudio
 import XCTest
 import LyricsCore
@@ -7,6 +8,32 @@ import LyricsCore
 
 @MainActor
 final class DynasicAppStateTests: XCTestCase {
+    func testWaveformFramesDoNotInvalidateWholeAppState() {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(
+                suiteName: "dynasic-waveform-presentation-\(UUID().uuidString)"
+            )!
+        )
+        var appStateChangeCount = 0
+        var presentationChangeCount = 0
+        let appStateCancellable = state.objectWillChange.sink {
+            appStateChangeCount += 1
+        }
+        let presentationCancellable = state.waveformPresentation.objectWillChange.sink {
+            presentationChangeCount += 1
+        }
+        let frame = WaveformFrame(
+            levels: Array(repeating: 0.5, count: WaveformFrame.levelCount)
+        )
+
+        state.waveformPresentation.update(.running(frame))
+
+        XCTAssertEqual(appStateChangeCount, 0)
+        XCTAssertEqual(presentationChangeCount, 1)
+        XCTAssertEqual(state.waveformState, .running(frame))
+        withExtendedLifetime((appStateCancellable, presentationCancellable)) {}
+    }
+
     func testInitialStateUsesDynasicDefaults() {
         let state = DynasicAppState(
             userDefaults: UserDefaults(suiteName: "dynasic-defaults-\(UUID().uuidString)")!
