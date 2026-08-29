@@ -174,6 +174,11 @@ final class WaveformSampleRing: @unchecked Sendable {
 final class WaveformSpectrumAnalyzer {
     static let sampleCount = 2_048
 
+    private struct DirectBandProjection {
+        let cosine: [Float]
+        let sine: [Float]
+    }
+
     private static let decibelFloor: Float = -72
     private static let fftBinCount = sampleCount / 2
     private static let log2SampleCount = vDSP_Length(log2(Float(sampleCount)))
@@ -183,6 +188,7 @@ final class WaveformSpectrumAnalyzer {
     private let windowSum: Float
     private let fftBandIndices: [Int]
     private let bandBinCounts: [Int]
+    private let directBandProjections: [DirectBandProjection?]
 
     private var history = Array(repeating: Float.zero, count: sampleCount)
     private var historyWriteIndex = 0
@@ -227,6 +233,26 @@ final class WaveformSpectrumAnalyzer {
         }
         fftBandIndices = indices
         bandBinCounts = counts
+        let minimumFrequency = WaveformSpectrumProcessor.minimumFrequency
+        let frequencyRatio = WaveformSpectrumProcessor.maximumFrequency / minimumFrequency
+        let bandCount = Float(WaveformSpectrumProcessor.columnCount)
+        directBandProjections = counts.indices.map { bandIndex in
+            guard counts[bandIndex] == 0 else { return nil }
+            let lowerFrequency = minimumFrequency * pow(
+                frequencyRatio,
+                Float(bandIndex) / bandCount
+            )
+            let upperFrequency = minimumFrequency * pow(
+                frequencyRatio,
+                Float(bandIndex + 1) / bandCount
+            )
+            let centerFrequency = sqrt(lowerFrequency * upperFrequency)
+            let angularStep = 2 * Float.pi * centerFrequency / Float(sampleRate)
+            return DirectBandProjection(
+                cosine: (0..<Self.sampleCount).map { cos(angularStep * Float($0)) },
+                sine: (0..<Self.sampleCount).map { sin(angularStep * Float($0)) }
+            )
+        }
     }
 
     deinit {
@@ -297,13 +323,45 @@ final class WaveformSpectrumAnalyzer {
                 realValue * realValue + imaginaryValue * imaginaryValue
             ) * powerScale
         }
+        for bandIndex in directBandProjections.indices {
+            guard let projection = directBandProjections[bandIndex] else { continue }
+            var realValue: Float = 0
+            var imaginaryValue: Float = 0
+            fftInput.withUnsafeBufferPointer { input in
+                projection.cosine.withUnsafeBufferPointer { cosine in
+                    vDSP_dotpr(
+                        input.baseAddress!,
+                        1,
+                        cosine.baseAddress!,
+                        1,
+                        &realValue,
+                        vDSP_Length(Self.sampleCount)
+                    )
+                }
+                projection.sine.withUnsafeBufferPointer { sine in
+                    vDSP_dotpr(
+                        input.baseAddress!,
+                        1,
+                        sine.baseAddress!,
+                        1,
+                        &imaginaryValue,
+                        vDSP_Length(Self.sampleCount)
+                    )
+                }
+            }
+            imaginaryValue = -imaginaryValue
+            bandPowers[bandIndex] = (
+                realValue * realValue + imaginaryValue * imaginaryValue
+            ) * powerScale
+        }
 
         for index in levels.indices {
             levels[index] = 0
         }
-        for bandIndex in levels.indices where bandBinCounts[bandIndex] > 0 {
+        for bandIndex in levels.indices
+        where bandBinCounts[bandIndex] > 0 || directBandProjections[bandIndex] != nil {
             let amplitude = sqrt(
-                bandPowers[bandIndex] / Float(bandBinCounts[bandIndex])
+                bandPowers[bandIndex] / Float(max(bandBinCounts[bandIndex], 1))
             )
             levels[bandIndex] = Self.normalizedLevel(forAmplitude: amplitude)
         }

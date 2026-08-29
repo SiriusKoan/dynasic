@@ -743,6 +743,22 @@ final class WaveformAudioBufferTests: XCTestCase {
         XCTAssertTrue(bucket.levels.allSatisfy { $0 == 0 })
     }
 
+    func testSpectrumAnalyzerProducesEnergyForEveryBandAtCommonSampleRates() throws {
+        for sampleRate in [44_100.0, 48_000.0, 96_000.0] {
+            let analyzer = try XCTUnwrap(WaveformSpectrumAnalyzer(sampleRate: sampleRate))
+            for index in 0..<WaveformSpectrumAnalyzer.sampleCount {
+                analyzer.append(index == WaveformSpectrumAnalyzer.sampleCount / 2 ? 1 : 0)
+            }
+
+            let bucket = try XCTUnwrap(analyzer.makeBucket())
+
+            XCTAssertTrue(
+                bucket.levels.allSatisfy { $0 > 0 },
+                "Expected every spectrum band to produce energy at \(sampleRate) Hz"
+            )
+        }
+    }
+
     private func spectrumBucket(
         frequency: Double,
         amplitude: Float,
