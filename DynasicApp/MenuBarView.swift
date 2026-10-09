@@ -32,12 +32,12 @@ struct MenuBarView: View {
             }
 
             Button("Settings") {
-                openWindow(id: "settings")
+                DynasicAuxiliaryWindow.settings.open(using: openWindow)
             }
 
             Button("Diagnostics") {
                 state.refreshViewState()
-                openWindow(id: "diagnostics")
+                DynasicAuxiliaryWindow.diagnostics.open(using: openWindow)
             }
 
             Divider()

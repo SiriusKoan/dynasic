@@ -2,6 +2,73 @@ import AppKit
 import SwiftUI
 
 @MainActor
+enum DynasicAuxiliaryWindow: String, CaseIterable {
+    case settings
+    case diagnostics
+
+    private static weak var pendingFocusWindow: NSWindow?
+
+    var identifier: NSUserInterfaceItemIdentifier {
+        NSUserInterfaceItemIdentifier("dynasic.\(rawValue)")
+    }
+
+    func open(using openWindow: OpenWindowAction) {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        openWindow(id: rawValue)
+        if let window = NSApplication.shared.windows.first(where: { $0.identifier == identifier }) {
+            focus(window)
+        }
+    }
+
+    func focus(
+        _ window: NSWindow,
+        activateApplication: () -> Void = {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+    ) {
+        window.identifier = identifier
+        // Keep utility windows above the floating lyrics overlay.
+        window.level = .floating
+        Self.pendingFocusWindow = NSApplication.shared.isActive ? nil : window
+        activateApplication()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    static func finishPendingActivation() {
+        guard NSApplication.shared.isActive, let window = pendingFocusWindow else { return }
+        pendingFocusWindow = nil
+        guard window.isVisible else { return }
+        window.makeKeyAndOrderFront(nil)
+    }
+}
+
+private struct AuxiliaryWindowFocus: NSViewRepresentable {
+    let destination: DynasicAuxiliaryWindow
+
+    func makeNSView(context: Context) -> FocusView {
+        let view = FocusView()
+        view.destination = destination
+        return view
+    }
+
+    func updateNSView(_ nsView: FocusView, context: Context) {}
+
+    final class FocusView: NSView {
+        var destination: DynasicAuxiliaryWindow?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, let destination else { return }
+            window.identifier = destination.identifier
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window, self.window === window else { return }
+                destination.focus(window)
+            }
+        }
+    }
+}
+
+@MainActor
 final class DynasicAppDelegate: NSObject, NSApplicationDelegate {
     var onShowLyrics: (() -> Void)?
     var onTerminationRequest: (() async -> Void)?
@@ -50,7 +117,13 @@ final class DynasicAppDelegate: NSObject, NSApplicationDelegate {
 
     private func showLyricsOnNextRunLoop() {
         DispatchQueue.main.async { [weak self] in
+            let keyWindow = NSApplication.shared.keyWindow
             self?.onShowLyrics?()
+            if let keyWindow,
+               DynasicAuxiliaryWindow.allCases.contains(where: { $0.identifier == keyWindow.identifier }) {
+                keyWindow.orderFrontRegardless()
+            }
+            DynasicAuxiliaryWindow.finishPendingActivation()
         }
     }
 }
@@ -78,10 +151,12 @@ struct DynasicApp: App {
 
         Window("Settings", id: "settings") {
             SettingsView(state: appState)
+                .background(AuxiliaryWindowFocus(destination: .settings))
         }
 
         Window("Diagnostics", id: "diagnostics") {
             DiagnosticsView(state: appState)
+                .background(AuxiliaryWindowFocus(destination: .diagnostics))
         }
     }
 }

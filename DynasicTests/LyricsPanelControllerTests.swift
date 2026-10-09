@@ -47,6 +47,7 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertTrue(panel.standardWindowButton(.zoomButton)?.isHidden == true)
         let hostingView = try! XCTUnwrap(panel.contentView as? NSHostingView<LyricsPanelView>)
         XCTAssertTrue(hostingView.sizingOptions.isEmpty)
+        XCTAssertTrue(hostingView.acceptsFirstMouse(for: nil))
         XCTAssertEqual(panel.minSize, LyricsPanelController.minimumExpandedSize)
         XCTAssertEqual(panel.maxSize, LyricsPanelController.maximumExpandedSize)
         XCTAssertTrue(panel.isFloatingPanel)
@@ -70,6 +71,120 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertFalse(panel.isFloatingPanel)
         XCTAssertEqual(panel.level, .normal)
         state.hideLyrics()
+    }
+
+    func testClickMakesPanelFullyOpaqueUntilItLosesFocus() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.lyricsOpacity = 0.35
+        let controller = LyricsPanelController(state: state, userDefaults: defaults)
+        controller.show()
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(controller.panelForTesting)
+        XCTAssertEqual(controller.displayedOpacity, 0.35)
+
+        panel.sendEvent(mouseEvent(.leftMouseDown, at: NSPoint(x: 20, y: 20), for: panel))
+
+        XCTAssertTrue(controller.hasKeyboardFocus)
+        XCTAssertEqual(controller.displayedOpacity, 1)
+        state.settings.lyricsOpacity = 0.6
+        XCTAssertEqual(controller.displayedOpacity, 1)
+
+        panel.resignKey()
+
+        XCTAssertFalse(controller.hasKeyboardFocus)
+        XCTAssertEqual(controller.displayedOpacity, 0.6)
+        XCTAssertEqual(state.settings.lyricsOpacity, 0.6)
+    }
+
+    func testClickThroughKeepsActualControlsInteractiveAcrossLayoutsAndRotation() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isClickThrough = true
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+        controller.show()
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(controller.panelForTesting)
+
+        for layout in LyricsPanelLayout.allCases {
+            state.settings.lyricsPanelLayout = layout
+            for _ in 0..<2 {
+                panel.contentView?.layoutSubtreeIfNeeded()
+                let controls = controller.controlRegionFrames
+                XCTAssertEqual(controls.count, 2, "Quit and toolbar regions must be registered")
+                for frame in controls {
+                    XCTAssertGreaterThan(frame.width, 0)
+                    XCTAssertGreaterThan(frame.height, 0)
+                    controller.updatePointerLocation(NSPoint(x: frame.midX, y: frame.midY))
+                    XCTAssertFalse(panel.ignoresMouseEvents)
+                }
+                controller.updatePointerLocation(NSPoint(x: panel.frame.midX, y: panel.frame.midY))
+                XCTAssertTrue(panel.ignoresMouseEvents)
+                controller.rotateContent()
+            }
+        }
+
+        panel.setFrameOrigin(NSPoint(x: panel.frame.minX + 30, y: panel.frame.minY + 30))
+        let movedControl = try XCTUnwrap(controller.controlRegionFrames.first)
+        controller.updatePointerLocation(NSPoint(x: movedControl.midX, y: movedControl.midY))
+        XCTAssertFalse(panel.ignoresMouseEvents)
+    }
+
+    func testPointerMonitorsFollowVisibilityClickThroughAndCollapse() throws {
+        let defaults = UserDefaults(suiteName: "dynasic-panel-\(UUID().uuidString)")!
+        let state = DynasicAppState(userDefaults: defaults)
+        state.settings.isClickThrough = true
+        let controller = LyricsPanelController(
+            state: state,
+            userDefaults: defaults,
+            animationDuration: 0
+        )
+        XCTAssertFalse(controller.isMonitoringPointerForTesting)
+        controller.show()
+        defer { controller.hide() }
+        XCTAssertTrue(controller.isMonitoringPointerForTesting)
+
+        controller.toggleCollapsed()
+        XCTAssertFalse(controller.isMonitoringPointerForTesting)
+        XCTAssertFalse(try XCTUnwrap(controller.panelForTesting).ignoresMouseEvents)
+        controller.toggleCollapsed()
+        XCTAssertTrue(controller.isMonitoringPointerForTesting)
+
+        controller.hide()
+        XCTAssertFalse(controller.isMonitoringPointerForTesting)
+        controller.show()
+        XCTAssertTrue(controller.isMonitoringPointerForTesting)
+        controller.setClickThrough(false)
+        XCTAssertFalse(controller.isMonitoringPointerForTesting)
+        XCTAssertFalse(try XCTUnwrap(controller.panelForTesting).ignoresMouseEvents)
+    }
+
+    func testAuxiliaryWindowsRequestActivationAndFocusAgainWhenReused() {
+        for destination in DynasicAuxiliaryWindow.allCases {
+            let window = FocusRecordingWindow(
+                contentRect: NSRect(x: 100, y: 100, width: 360, height: 320),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            defer { window.close() }
+
+            var activationCount = 0
+            destination.focus(window) { activationCount += 1 }
+            XCTAssertEqual(window.identifier, destination.identifier)
+            XCTAssertEqual(window.level, .floating)
+            XCTAssertEqual(activationCount, 1)
+            XCTAssertEqual(window.focusRequestCount, 1)
+
+            destination.focus(window) { activationCount += 1 }
+            XCTAssertEqual(activationCount, 2)
+            XCTAssertEqual(window.focusRequestCount, 2)
+        }
     }
 
     func testPanelPersistsAnchoredExpandedFrameAndRestoresItAfterCollapse() throws {
@@ -589,5 +704,13 @@ final class LyricsPanelControllerTests: XCTestCase {
             clickCount: 1,
             pressure: 1
         )!
+    }
+
+    private final class FocusRecordingWindow: NSWindow {
+        private(set) var focusRequestCount = 0
+
+        override func makeKeyAndOrderFront(_ sender: Any?) {
+            focusRequestCount += 1
+        }
     }
 }

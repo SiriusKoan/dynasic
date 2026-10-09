@@ -36,11 +36,12 @@ struct LyricsPanelView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Quit dynasic")
+                        .background(LyricsPanelControlRegion(controller: controller))
                     }
                     .overlay(alignment: .topTrailing) {
                         HStack(spacing: 2) {
                             Button {
-                                openWindow(id: "settings")
+                                DynasicAuxiliaryWindow.settings.open(using: openWindow)
                             } label: {
                                 Image(systemName: "gearshape")
                                     .font(.caption.weight(.semibold))
@@ -51,7 +52,7 @@ struct LyricsPanelView: View {
 
                             Button {
                                 state.refreshViewState()
-                                openWindow(id: "diagnostics")
+                                DynasicAuxiliaryWindow.diagnostics.open(using: openWindow)
                             } label: {
                                 Image(systemName: "stethoscope")
                                     .font(.caption.weight(.semibold))
@@ -80,6 +81,7 @@ struct LyricsPanelView: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel("Collapse lyrics")
                         }
+                        .background(LyricsPanelControlRegion(controller: controller))
                     }
                     .padding(16)
             }
@@ -88,7 +90,7 @@ struct LyricsPanelView: View {
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
-        .opacity(state.settings.lyricsOpacity)
+        .opacity(controller.displayedOpacity)
         .ignoresSafeArea()
     }
 
@@ -328,6 +330,41 @@ struct LyricsPanelView: View {
         guard let value, value.isFinite, value >= 0 else { return "—" }
         let totalSeconds = Int(value.rounded(.down))
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
+private struct LyricsPanelControlRegion: NSViewRepresentable {
+    let controller: LyricsPanelController
+
+    func makeNSView(context: Context) -> ControlRegionView {
+        let view = ControlRegionView()
+        view.controller = controller
+        return view
+    }
+
+    func updateNSView(_ nsView: ControlRegionView, context: Context) {
+        nsView.controller = controller
+    }
+
+    final class ControlRegionView: NSView {
+        weak var controller: LyricsPanelController?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            controller?.registerControlRegion(self)
+        }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            controller?.updatePointerLocation(NSEvent.mouseLocation)
+        }
+
+        override func setFrameOrigin(_ newOrigin: NSPoint) {
+            super.setFrameOrigin(newOrigin)
+            controller?.updatePointerLocation(NSEvent.mouseLocation)
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
 

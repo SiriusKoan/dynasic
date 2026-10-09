@@ -13,6 +13,7 @@ private final class LyricsPanelWindow: NSPanel {
 
     var onUserFinishedMoving: (() -> Void)?
     var onUserTapped: (() -> Void)?
+    var onKeyStatusChanged: ((Bool) -> Void)?
 
     var isCollapsedForInteraction = false
 
@@ -21,7 +22,22 @@ private final class LyricsPanelWindow: NSPanel {
     private var didMoveCollapsedPanel = false
     private var expandedPointerDownOrigin: NSPoint?
 
+    override var canBecomeKey: Bool { true }
+
+    override func becomeKey() {
+        super.becomeKey()
+        onKeyStatusChanged?(true)
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        onKeyStatusChanged?(false)
+    }
+
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown {
+            makeKey()
+        }
         guard isCollapsedForInteraction else {
             if event.type == .leftMouseDown {
                 expandedPointerDownOrigin = frame.origin
@@ -100,6 +116,11 @@ private final class LyricsPanelWindow: NSPanel {
 }
 
 @MainActor
+private final class LyricsPanelHostingView: NSHostingView<LyricsPanelView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+@MainActor
 final class LyricsPanelController: ObservableObject {
     private struct EdgeAnchorTarget {
         let frame: NSRect
@@ -127,11 +148,16 @@ final class LyricsPanelController: ObservableObject {
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
     private var moveEndMonitor: Any?
+    private var localPointerMonitor: Any?
+    private var globalPointerMonitor: Any?
+    private let controlRegions = NSHashTable<NSView>.weakObjects()
+    private var isClickThroughEnabled: Bool
     private var frameMutationState = FrameMutationState.idle
     private var expandedFrame: NSRect?
     private var collapsedFrameOrigin: NSPoint?
 
     @Published private(set) var isCollapsed = false
+    @Published private(set) var hasKeyboardFocus = false
     @Published private(set) var contentOrientation: LyricsPanelContentOrientation
 
     init(
@@ -148,6 +174,7 @@ final class LyricsPanelController: ObservableObject {
         self.legacyOriginKey = legacyOriginKey
         self.orientationKey = orientationKey
         self.animationDuration = max(0, animationDuration)
+        self.isClickThroughEnabled = state.settings.isClickThrough
         self.contentOrientation = LyricsPanelContentOrientation(
             rawValue: userDefaults.string(forKey: orientationKey) ?? ""
         ) ?? .horizontal
@@ -163,11 +190,18 @@ final class LyricsPanelController: ObservableObject {
         if let moveEndMonitor {
             NSEvent.removeMonitor(moveEndMonitor)
         }
+        if let localPointerMonitor {
+            NSEvent.removeMonitor(localPointerMonitor)
+        }
+        if let globalPointerMonitor {
+            NSEvent.removeMonitor(globalPointerMonitor)
+        }
     }
 
     func show() {
         let panel = makePanelIfNeeded()
         panel.orderFrontRegardless()
+        updatePointerMonitoring()
         state.refreshWaveformCapture()
         guard !isCollapsed, frameMutationState != .animating else { return }
 
@@ -179,11 +213,57 @@ final class LyricsPanelController: ObservableObject {
 
     func hide() {
         panel?.orderOut(nil)
+        hasKeyboardFocus = false
+        updatePointerMonitoring()
         state.refreshWaveformCapture()
     }
 
     func setClickThrough(_ enabled: Bool) {
-        panel?.ignoresMouseEvents = isCollapsed ? false : enabled
+        isClickThroughEnabled = enabled
+        updatePointerMonitoring()
+    }
+
+    func registerControlRegion(_ view: NSView) {
+        controlRegions.add(view)
+        updatePointerLocation(NSEvent.mouseLocation)
+    }
+
+    func updatePointerLocation(_ screenLocation: NSPoint) {
+        guard let panel else { return }
+        let isOverControl = controlRegionFrames.contains { $0.contains(screenLocation) }
+        panel.ignoresMouseEvents = isClickThroughEnabled && !isCollapsed && !isOverControl
+    }
+
+    private func updatePointerMonitoring() {
+        let shouldMonitor = isVisible && isClickThroughEnabled && !isCollapsed
+        if shouldMonitor, localPointerMonitor == nil {
+            panel?.acceptsMouseMovedEvents = true
+            let events: NSEvent.EventTypeMask = [
+                .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+                .leftMouseUp, .rightMouseUp, .otherMouseUp
+            ]
+            localPointerMonitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
+                MainActor.assumeIsolated {
+                    self?.updatePointerLocation(NSEvent.mouseLocation)
+                }
+                return event
+            }
+            globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: events) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.updatePointerLocation(NSEvent.mouseLocation)
+                }
+            }
+        } else if !shouldMonitor {
+            if let localPointerMonitor {
+                NSEvent.removeMonitor(localPointerMonitor)
+                self.localPointerMonitor = nil
+            }
+            if let globalPointerMonitor {
+                NSEvent.removeMonitor(globalPointerMonitor)
+                self.globalPointerMonitor = nil
+            }
+        }
+        updatePointerLocation(NSEvent.mouseLocation)
     }
 
     func setAlwaysOnTop(_ enabled: Bool) {
@@ -196,6 +276,21 @@ final class LyricsPanelController: ObservableObject {
     }
 
     var panelForTesting: NSPanel? { panel }
+    var isMonitoringPointerForTesting: Bool {
+        localPointerMonitor != nil && globalPointerMonitor != nil
+    }
+
+    var displayedOpacity: Double {
+        hasKeyboardFocus ? 1 : state.settings.lyricsOpacity
+    }
+
+    var controlRegionFrames: [NSRect] {
+        guard let panel, !isCollapsed else { return [] }
+        return controlRegions.allObjects.compactMap { view in
+            guard view.window === panel, !view.isHiddenOrHasHiddenAncestor else { return nil }
+            return panel.convertToScreen(view.convert(view.bounds, to: nil))
+        }
+    }
 
     var frameDescription: String {
         guard let frame = panel?.frame else { return "not created" }
@@ -274,8 +369,11 @@ final class LyricsPanelController: ObservableObject {
         panel.onUserTapped = { [weak self] in
             self?.toggleCollapsed()
         }
+        panel.onKeyStatusChanged = { [weak self] isKey in
+            self?.hasKeyboardFocus = isKey
+        }
         self.panel = panel
-        let hostingView = NSHostingView(rootView: LyricsPanelView(state: state, controller: self))
+        let hostingView = LyricsPanelHostingView(rootView: LyricsPanelView(state: state, controller: self))
         hostingView.sizingOptions = []
         panel.contentView = hostingView
         applyExpandedSizeLimits(to: panel)
@@ -344,6 +442,7 @@ final class LyricsPanelController: ObservableObject {
     }
 
     private func recordFrameChange(_ window: NSWindow) {
+        updatePointerLocation(NSEvent.mouseLocation)
         guard frameMutationState == .idle else { return }
         if isCollapsed {
             recordCollapsedFrameChange(window.frame)
@@ -393,7 +492,7 @@ final class LyricsPanelController: ObservableObject {
             size: Self.collapsedSize
         )
         collapsedFrameOrigin = collapsedFrame.origin
-        panel.ignoresMouseEvents = false
+        updatePointerMonitoring()
         animateFrame(collapsedFrame, on: panel) { [weak panel] in
             guard let panel else { return }
             panel.minSize = Self.collapsedSize
@@ -414,7 +513,7 @@ final class LyricsPanelController: ObservableObject {
         hideStandardWindowButtons(on: panel)
         panel.minSize = NSSize(width: 1, height: 1)
         panel.maxSize = Self.unconstrainedExpandedSize
-        panel.ignoresMouseEvents = state.settings.isClickThrough
+        updatePointerMonitoring()
         animateFrame(frame, on: panel) { [weak self, weak panel] in
             guard let self, let panel else { return }
             self.applyExpandedSizeLimits(to: panel)
