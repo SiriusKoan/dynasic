@@ -6,7 +6,6 @@ import LyricsCore
 struct LyricsPanelView: View {
     @ObservedObject var state: DynasicAppState
     @ObservedObject var controller: LyricsPanelController
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -41,7 +40,7 @@ struct LyricsPanelView: View {
                     .overlay(alignment: .topTrailing) {
                         HStack(spacing: 2) {
                             Button {
-                                DynasicAuxiliaryWindow.settings.open(using: openWindow)
+                                state.openAuxiliaryWindow(.settings)
                             } label: {
                                 Image(systemName: "gearshape")
                                     .font(.caption.weight(.semibold))
@@ -52,7 +51,7 @@ struct LyricsPanelView: View {
 
                             Button {
                                 state.refreshViewState()
-                                DynasicAuxiliaryWindow.diagnostics.open(using: openWindow)
+                                state.openAuxiliaryWindow(.diagnostics)
                             } label: {
                                 Image(systemName: "stethoscope")
                                     .font(.caption.weight(.semibold))

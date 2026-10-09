@@ -163,7 +163,10 @@ final class LyricsPanelControllerTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(controller.panelForTesting).ignoresMouseEvents)
     }
 
-    func testAuxiliaryWindowsRequestActivationAndFocusAgainWhenReused() {
+    func testNewAuxiliaryWindowsAreReadyAndSelectedBeforeActivation() throws {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-windows-\(UUID().uuidString)")!
+        )
         for destination in DynasicAuxiliaryWindow.allCases {
             let window = FocusRecordingWindow(
                 contentRect: NSRect(x: 100, y: 100, width: 360, height: 320),
@@ -175,16 +178,192 @@ final class LyricsPanelControllerTests: XCTestCase {
             defer { window.close() }
 
             var activationCount = 0
-            destination.focus(window) { activationCount += 1 }
-            XCTAssertEqual(window.identifier, destination.identifier)
-            XCTAssertEqual(window.level, .floating)
-            XCTAssertEqual(activationCount, 1)
-            XCTAssertEqual(window.focusRequestCount, 1)
+            var creationCount = 0
+            let controller = DynasicAuxiliaryWindowController(
+                activateApplication: { _ in
+                    XCTAssertEqual(window.focusRequests, ["main", "key", "front"])
+                    XCTAssertEqual(window.identifier, destination.identifier)
+                    activationCount += 1
+                },
+                windowFactory: { requestedDestination, requestedState in
+                    XCTAssertEqual(requestedDestination, destination)
+                    XCTAssertTrue(requestedState === state)
+                    creationCount += 1
+                    return window
+                }
+            )
+            XCTAssertNil(controller.windowForTesting(destination))
 
-            destination.focus(window) { activationCount += 1 }
+            controller.show(destination, state: state)
+
+            XCTAssertTrue(try XCTUnwrap(controller.windowForTesting(destination)) === window)
+            XCTAssertEqual(window.identifier, destination.identifier)
+            XCTAssertEqual(window.title, destination.title)
+            XCTAssertEqual(window.level, .floating)
+            XCTAssertTrue(window.collectionBehavior.contains(.moveToActiveSpace))
+            XCTAssertTrue(window.collectionBehavior.contains(.fullScreenAuxiliary))
+            XCTAssertEqual(creationCount, 1)
+            XCTAssertEqual(activationCount, 1)
+
+            window.focusRequests.removeAll()
+            controller.show(destination, state: state)
+            XCTAssertEqual(creationCount, 1)
             XCTAssertEqual(activationCount, 2)
-            XCTAssertEqual(window.focusRequestCount, 2)
         }
+    }
+
+    func testActivationRestoresRequestedWindowAfterShowingLyrics() {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-windows-\(UUID().uuidString)")!
+        )
+        let window = FocusRecordingWindow(
+            contentRect: NSRect(x: 100, y: 100, width: 360, height: 320),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        var activationCount = 0
+        let controller = DynasicAuxiliaryWindowController(
+            activateApplication: { _ in activationCount += 1 },
+            windowFactory: { _, _ in window }
+        )
+        controller.show(.settings, state: state)
+        window.focusRequests.removeAll()
+
+        controller.restoreFocusAfterActivation()
+
+        XCTAssertEqual(window.focusRequests, ["main", "key", "front"])
+        XCTAssertEqual(activationCount, 1, "Restoring focus must not request another activation")
+
+        controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        window.focusRequests.removeAll()
+        controller.restoreFocusAfterActivation()
+        XCTAssertTrue(window.focusRequests.isEmpty, "A closed window must not be restored")
+    }
+
+    func testAuxiliaryControllerBuildsAndReusesBothHostedWindows() throws {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-windows-\(UUID().uuidString)")!
+        )
+        let controller = DynasicAuxiliaryWindowController(activateApplication: { _ in })
+        for destination in DynasicAuxiliaryWindow.allCases {
+            XCTAssertNil(controller.windowForTesting(destination))
+            controller.show(destination, state: state)
+            let window = try XCTUnwrap(controller.windowForTesting(destination))
+            defer { window.close() }
+            let hostingView = try XCTUnwrap(window.contentView as? NSHostingView<AnyView>)
+            XCTAssertTrue(hostingView.sizingOptions.isEmpty)
+            XCTAssertTrue(window.isVisible)
+            XCTAssertTrue(window.canBecomeMain)
+            XCTAssertTrue(window.canBecomeKey)
+
+            window.close()
+            controller.show(destination, state: state)
+            XCTAssertTrue(controller.windowForTesting(destination) === window)
+            XCTAssertTrue(window.isVisible)
+        }
+    }
+
+    func testActivationRequestsForegroundForTheCurrentAppWithoutLaunchingAnotherInstance() {
+        var requestCount = 0
+        var completionCount = 0
+        DynasicApplicationActivation.request(completion: { completionCount += 1 }) { url, configuration, completion in
+            requestCount += 1
+            XCTAssertEqual(url, Bundle.main.bundleURL)
+            XCTAssertTrue(configuration.activates)
+            XCTAssertFalse(configuration.createsNewApplicationInstance)
+            XCTAssertFalse(configuration.allowsRunningApplicationSubstitution)
+            XCTAssertFalse(configuration.addsToRecentItems)
+            completion()
+        }
+        XCTAssertEqual(requestCount, 1)
+        XCTAssertEqual(completionCount, 1)
+    }
+
+    func testReopeningAuxiliaryWindowMovesItToTheInvokingScreen() throws {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-windows-\(UUID().uuidString)")!
+        )
+        let recordedWindow = FocusRecordingWindow(
+            contentRect: NSRect(x: 100, y: 100, width: 480, height: 580),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        recordedWindow.isReleasedWhenClosed = false
+        var visibleFrame = NSRect(x: 0, y: 25, width: 1_440, height: 875)
+        let controller = DynasicAuxiliaryWindowController(
+            activateApplication: { _ in },
+            windowFactory: { _, _ in recordedWindow },
+            presentationVisibleFrame: { visibleFrame }
+        )
+        controller.show(.settings, state: state)
+        let window = try XCTUnwrap(controller.windowForTesting(.settings))
+        defer { window.close() }
+        XCTAssertEqual(window.frame.midX, visibleFrame.midX, accuracy: 0.5)
+        XCTAssertEqual(window.frame.midY, visibleFrame.midY, accuracy: 0.5)
+        window.close()
+
+        visibleFrame = NSRect(x: -1_920, y: 25, width: 1_920, height: 1_055)
+        controller.show(.settings, state: state)
+
+        XCTAssertTrue(controller.windowForTesting(.settings) === window)
+        XCTAssertEqual(window.frame.midX, visibleFrame.midX, accuracy: 0.5)
+        XCTAssertEqual(window.frame.midY, visibleFrame.midY, accuracy: 0.5)
+        XCTAssertTrue(visibleFrame.contains(window.frame))
+    }
+
+    func testAuxiliaryWindowFitsScreensWithDifferentOriginsAndSizes() {
+        let original = NSRect(x: 100, y: 100, width: 480, height: 580)
+        for visible in [
+            NSRect(x: -1_920, y: 25, width: 1_920, height: 1_055),
+            NSRect(x: 1_440, y: -900, width: 1_600, height: 900),
+            NSRect(x: 0, y: 0, width: 400, height: 300)
+        ] {
+            let centered = DynasicAuxiliaryWindowController.centeredFrame(for: original, in: visible)
+            XCTAssertTrue(visible.contains(centered))
+            XCTAssertEqual(centered.midX, visible.midX)
+            XCTAssertEqual(centered.midY, visible.midY)
+        }
+    }
+
+    func testActivationCompletionDoesNotFocusAClosedOrSupersededWindow() throws {
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-windows-\(UUID().uuidString)")!
+        )
+        var completions: [@MainActor () -> Void] = []
+        let controller = DynasicAuxiliaryWindowController(
+            activateApplication: { completions.append($0) },
+            windowFactory: { _, _ in
+                FocusRecordingWindow(
+                    contentRect: NSRect(x: 100, y: 100, width: 360, height: 320),
+                    styleMask: [.titled, .closable],
+                    backing: .buffered,
+                    defer: false
+                )
+            }
+        )
+        controller.show(.settings, state: state)
+        let settings = try XCTUnwrap(controller.windowForTesting(.settings) as? FocusRecordingWindow)
+        settings.focusRequests.removeAll()
+        completions[0]()
+        XCTAssertEqual(settings.focusRequests, ["main", "key", "front"])
+        settings.focusRequests.removeAll()
+
+        controller.show(.diagnostics, state: state)
+        let diagnostics = try XCTUnwrap(controller.windowForTesting(.diagnostics) as? FocusRecordingWindow)
+        diagnostics.focusRequests.removeAll()
+        completions[0]()
+        XCTAssertTrue(settings.focusRequests.isEmpty)
+        completions[1]()
+        XCTAssertEqual(diagnostics.focusRequests, ["main", "key", "front"])
+
+        controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: diagnostics))
+        diagnostics.focusRequests.removeAll()
+        completions[1]()
+        XCTAssertTrue(diagnostics.focusRequests.isEmpty)
     }
 
     func testPanelPersistsAnchoredExpandedFrameAndRestoresItAfterCollapse() throws {
@@ -707,10 +886,26 @@ final class LyricsPanelControllerTests: XCTestCase {
     }
 
     private final class FocusRecordingWindow: NSWindow {
-        private(set) var focusRequestCount = 0
+        var focusRequests: [String] = []
+        private var requestedFrame: NSRect?
+
+        override var isVisible: Bool { true }
+        override var frame: NSRect { requestedFrame ?? super.frame }
+
+        override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+            requestedFrame = frameRect
+        }
+
+        override func makeMain() {
+            focusRequests.append("main")
+        }
 
         override func makeKeyAndOrderFront(_ sender: Any?) {
-            focusRequestCount += 1
+            focusRequests.append("key")
+        }
+
+        override func orderFrontRegardless() {
+            focusRequests.append("front")
         }
     }
 }

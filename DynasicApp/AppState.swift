@@ -52,6 +52,7 @@ final class DynasicAppState: ObservableObject {
     private var artworkCache: [TrackIdentity: NSImage] = [:]
     private var artworkTask: Task<Void, Never>?
     private var panelController: LyricsPanelController?
+    private let auxiliaryWindowController = DynasicAuxiliaryWindowController()
 
     private static let playbackPositionRefreshMilliseconds: Int64 = 500
     private static let minimumLyricRefreshMilliseconds: Int64 = 10
@@ -108,6 +109,14 @@ final class DynasicAppState: ObservableObject {
         isLyricsVisible = false
         panelController?.hide()
         refreshWaveformCapture()
+    }
+
+    func openAuxiliaryWindow(_ destination: DynasicAuxiliaryWindow) {
+        auxiliaryWindowController.show(destination, state: self)
+    }
+
+    func restoreAuxiliaryWindowFocus() {
+        auxiliaryWindowController.restoreFocusAfterActivation()
     }
 
     func startObservation() {

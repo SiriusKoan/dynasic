@@ -3,7 +3,6 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject var state: DynasicAppState
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -32,12 +31,12 @@ struct MenuBarView: View {
             }
 
             Button("Settings") {
-                DynasicAuxiliaryWindow.settings.open(using: openWindow)
+                state.openAuxiliaryWindow(.settings)
             }
 
             Button("Diagnostics") {
                 state.refreshViewState()
-                DynasicAuxiliaryWindow.diagnostics.open(using: openWindow)
+                state.openAuxiliaryWindow(.diagnostics)
             }
 
             Divider()
@@ -105,7 +104,7 @@ struct SettingsView: View {
             }
         }
         .padding()
-        .frame(width: 360)
+        .frame(width: 480)
     }
 }
 
