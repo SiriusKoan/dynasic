@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run checks
+        run: ./scripts/check.sh
+
+      - name: Build Release app
+        run: |
+          xcodebuild \
+            -project dynasic.xcodeproj \
+            -scheme dynasic \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath .build/release \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package app
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          app_path=.build/release/Build/Products/Release/dynasic.app
+          version="${RELEASE_TAG#v}"
+          plutil -replace CFBundleShortVersionString -string "${version%%-*}" "$app_path/Contents/Info.plist"
+          plutil -replace CFBundleVersion -string "$GITHUB_RUN_NUMBER" "$app_path/Contents/Info.plist"
+          codesign --force --sign - "$app_path"
+          codesign --verify --strict --verbose=2 "$app_path"
+          ditto -c -k --keepParent --norsrc --noextattr "$app_path" .build/release/dynasic.zip
+          unzip -tq .build/release/dynasic.zip
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IS_PRERELEASE: ${{ contains(github.ref_name, '-') }}
+        run: |
+          gh release create "$RELEASE_TAG" .build/release/dynasic.zip \
+            --verify-tag \
+            --title "dynasic $RELEASE_TAG" \
+            --prerelease="$IS_PRERELEASE" \
+            --generate-notes \
+            --notes "Apple Silicon only; requires macOS 14.2 or later. This build is ad-hoc signed, without Developer ID signing or Apple notarization. Unzip dynasic.zip and move dynasic.app to Applications; macOS may require approval in System Settings > Privacy & Security."
