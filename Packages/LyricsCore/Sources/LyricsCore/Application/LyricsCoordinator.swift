@@ -21,6 +21,7 @@ public actor LyricsCoordinator {
     private var activeTrackIdentity: TrackIdentity?
     private var activeTrack: TrackMetadata?
     private var lyricsTask: Task<Void, Never>?
+    private var lyricsUpdatesContinuation: AsyncStream<Void>.Continuation?
     private var generation: UInt64 = 0
 
     public private(set) var state: LyricsViewState = .idle
@@ -33,6 +34,21 @@ public actor LyricsCoordinator {
         self.provider = provider
         self.cache = cache
         self.playbackClock = playbackClock
+    }
+
+    deinit {
+        lyricsTask?.cancel()
+        lyricsUpdatesContinuation?.finish()
+    }
+
+    /// The application owns one subscription; restarting replaces the old stream.
+    public func lyricsUpdates() -> AsyncStream<Void> {
+        guard !Task.isCancelled else { return AsyncStream { $0.finish() } }
+        lyricsUpdatesContinuation?.finish()
+        let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        lyricsUpdatesContinuation = continuation
+        continuation.yield(())
+        return stream
     }
 
     public func process(snapshot: PlaybackSnapshot) async {
@@ -61,10 +77,23 @@ public actor LyricsCoordinator {
         currentDisplay().state
     }
 
-    public func currentDisplay() -> (state: LyricsViewState, position: TimeInterval?) {
+    public func currentDisplay() -> (
+        state: LyricsViewState,
+        position: TimeInterval?,
+        nextLyricChangePosition: TimeInterval?
+    ) {
         let position = playbackClock.currentPosition()
         refreshDisplayedState(position: position)
-        return (state, position)
+        let nextPosition: TimeInterval?
+        if case let .displaying(_, lyrics, currentIndex) = state,
+           position != nil,
+           lyrics.lines.indices.contains((currentIndex ?? -1) + 1) {
+            let offset = Double(lyrics.metadata.offsetMilliseconds ?? 0) / 1000
+            nextPosition = lyrics.lines[(currentIndex ?? -1) + 1].timestamp + offset
+        } else {
+            nextPosition = nil
+        }
+        return (state, position, nextPosition)
     }
 
     public func currentPosition() -> TimeInterval? {
@@ -72,16 +101,7 @@ public actor LyricsCoordinator {
     }
 
     public func nextLyricChangePosition() -> TimeInterval? {
-        guard case let .displaying(_, lyrics, _) = state,
-              let position = playbackClock.currentPosition(),
-              position.isFinite else {
-            return nil
-        }
-
-        let offset = Double(lyrics.metadata.offsetMilliseconds ?? 0) / 1000
-        let adjustedPosition = position - offset
-        return lyrics.lines.first { $0.timestamp > adjustedPosition }
-            .map { $0.timestamp + offset }
+        currentDisplay().nextLyricChangePosition
     }
 
     public func cancel() {
@@ -145,6 +165,7 @@ public actor LyricsCoordinator {
 
         guard let lyrics else {
             state = .noLyrics(track)
+            lyricsUpdatesContinuation?.yield(())
             return
         }
 
@@ -153,6 +174,7 @@ public actor LyricsCoordinator {
             lyrics: lyrics,
             position: playbackClock.currentPosition()
         )
+        lyricsUpdatesContinuation?.yield(())
         _ = await cache.store(lyrics, for: track)
     }
 
@@ -160,6 +182,7 @@ public actor LyricsCoordinator {
         guard isCurrent(identity: identity, generation: generation) else { return }
         lyricsTask = nil
         state = .error(.providerFailed)
+        lyricsUpdatesContinuation?.yield(())
     }
 
     private func refreshDisplayedState(position: TimeInterval?) {

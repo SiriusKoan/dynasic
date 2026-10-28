@@ -194,35 +194,11 @@ struct LyricsPanelView: View {
         }
     }
 
-    @ViewBuilder
     private var playbackProgress: some View {
-        if let duration = state.trackDuration, duration > 0 {
-            HStack(spacing: 8) {
-                Text(formattedTime(state.estimatedPlaybackPosition))
-                ProgressView(value: clampedPlaybackPosition, total: duration)
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: .infinity)
-                Text(formattedTime(duration))
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-        } else {
-            HStack(spacing: 8) {
-                Text("—")
-                ProgressView(value: 0, total: 1)
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: .infinity)
-                    .opacity(0.35)
-                Text("—")
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private var clampedPlaybackPosition: TimeInterval {
-        guard let duration = state.trackDuration, duration > 0 else { return 0 }
-        return min(max(state.estimatedPlaybackPosition ?? 0, 0), duration)
+        PlaybackProgressView(
+            presentation: state.playbackPresentation,
+            duration: state.trackDuration
+        )
     }
 
     private var lyricsOnlyLayout: some View {
@@ -323,6 +299,41 @@ struct LyricsPanelView: View {
 
     private var selectedLines: LyricsLinePresentation? {
         LyricsLinePresentation(viewState: state.viewState)
+    }
+}
+
+private struct PlaybackProgressView: View {
+    @ObservedObject var presentation: PlaybackPresentation
+    let duration: TimeInterval?
+
+    var body: some View {
+        if let duration, duration > 0 {
+            HStack(spacing: 8) {
+                Text(formattedTime(presentation.position))
+                ProgressView(value: clampedPlaybackPosition, total: duration)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: .infinity)
+                Text(formattedTime(duration))
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: 8) {
+                Text("—")
+                ProgressView(value: 0, total: 1)
+                    .progressViewStyle(.linear)
+                    .frame(maxWidth: .infinity)
+                    .opacity(0.35)
+                Text("—")
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var clampedPlaybackPosition: TimeInterval {
+        guard let duration, duration > 0 else { return 0 }
+        return min(max(presentation.position ?? 0, 0), duration)
     }
 
     private func formattedTime(_ value: TimeInterval?) -> String {

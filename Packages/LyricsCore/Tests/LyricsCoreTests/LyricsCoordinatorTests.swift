@@ -296,6 +296,52 @@ func coordinatorReportsNextLyricChangePositionFromLocalClock() async throws {
 }
 
 @Test
+func coordinatorReturnsSelectionAndNextBoundaryWithDuplicateTimestampsAndOffset() async throws {
+    let directory = try makeCoordinatorDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let track = coordinatorTrack(title: "Boundary")
+    let lyrics = Lyrics(lines: [
+        LyricLine(timestamp: 10, text: "First"),
+        LyricLine(timestamp: 10, text: "Duplicate"),
+        LyricLine(timestamp: 20, text: "Last")
+    ], metadata: LyricsMetadata(offsetMilliseconds: 250))
+    let cache = LyricsCache(directory: directory)
+    _ = await cache.store(lyrics, for: track)
+    let coordinator = LyricsCoordinator(provider: MockLyricsProvider(), cache: cache)
+
+    for (position, expectedIndex, next) in [
+        (9.0, nil, 10.25), (10.25, 1, 20.25), (20.25, 2, nil)
+    ] as [(Double, Int?, Double?)] {
+        await coordinator.process(snapshot: coordinatorSnapshot(track: track, state: .paused, position: position))
+        let display = await coordinator.currentDisplay()
+        #expect(display.position == position)
+        #expect(display.nextLyricChangePosition == next)
+        #expect(display.state == .displaying(track: track, lyrics: lyrics, currentIndex: expectedIndex))
+    }
+}
+
+@Test
+func coordinatorNotifiesWhenLyricsFinishAndSupportsSubscriptionRestart() async throws {
+    let directory = try makeCoordinatorDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let provider = MockLyricsProvider()
+    let track = coordinatorTrack(title: "Loaded")
+    let lyrics = coordinatorLyrics(text: "Ready")
+    await provider.setResult(.success(lyrics), for: track)
+    let coordinator = LyricsCoordinator(provider: provider, cache: LyricsCache(directory: directory))
+    var updates = await coordinator.lyricsUpdates().makeAsyncIterator()
+    #expect(await updates.next() != nil)
+
+    await coordinator.process(snapshot: coordinatorSnapshot(track: track, state: .paused, position: 10))
+    #expect(await updates.next() != nil)
+    #expect(await coordinator.currentState() == .displaying(track: track, lyrics: lyrics, currentIndex: 0))
+
+    var restarted = await coordinator.lyricsUpdates().makeAsyncIterator()
+    #expect(await updates.next() == nil)
+    #expect(await restarted.next() != nil)
+}
+
+@Test
 func providerFailureIsRecoverableOnNextTrack() async throws {
     let directory = try makeCoordinatorDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }

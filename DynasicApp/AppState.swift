@@ -14,9 +14,18 @@ final class WaveformPresentation: ObservableObject {
 }
 
 @MainActor
+final class PlaybackPresentation: ObservableObject {
+    @Published private(set) var position: TimeInterval?
+
+    func update(position: TimeInterval?) {
+        guard self.position != position else { return }
+        self.position = position
+    }
+}
+
+@MainActor
 final class DynasicAppState: ObservableObject {
     @Published private(set) var viewState: LyricsViewState = .idle
-    @Published private(set) var estimatedPlaybackPosition: TimeInterval?
     @Published private(set) var musicBackendStatus = "not started"
     @Published private(set) var reportedPlaybackState: PlaybackState?
     @Published private(set) var reportedPlaybackPosition: TimeInterval?
@@ -43,6 +52,7 @@ final class DynasicAppState: ObservableObject {
 
     let coordinator: LyricsCoordinator
     let waveformPresentation = WaveformPresentation()
+    let playbackPresentation = PlaybackPresentation()
     private let settingsStore: DynasicSettingsStore
     private let musicBackend: any AppleMusicObservationBackend
     private let artworkProvider: any AppleMusicArtworkProviding
@@ -54,9 +64,6 @@ final class DynasicAppState: ObservableObject {
     private var panelController: LyricsPanelController?
     private let auxiliaryWindowController = DynasicAuxiliaryWindowController()
 
-    private static let playbackPositionRefreshMilliseconds: Int64 = 500
-    private static let minimumLyricRefreshMilliseconds: Int64 = 10
-
     var panelControllerForTesting: LyricsPanelController? { panelController }
     var waveformState: WaveformCaptureState { waveformPresentation.state }
 
@@ -66,6 +73,7 @@ final class DynasicAppState: ObservableObject {
         artworkProvider: any AppleMusicArtworkProviding = AppleMusicArtworkService(),
         waveformSource: any WaveformSource = AppleMusicProcessTapWaveformSource(),
         waveformTimeSource: any MonotonicTimeSource = ContinuousClockTimeSource(),
+        coordinator: LyricsCoordinator? = nil,
         startImmediately: Bool = false
     ) {
         self.musicBackend = musicBackend
@@ -77,14 +85,11 @@ final class DynasicAppState: ObservableObject {
         let settingsStore = DynasicSettingsStore(userDefaults: userDefaults)
         self.settingsStore = settingsStore
         _settings = Published(initialValue: settingsStore.load())
-        _estimatedPlaybackPosition = Published(initialValue: nil)
-
-        let provider = LyricsProviderChain(providers: [
-            AppleMusicCacheLyricsProvider(),
-            LRCLIBProvider(httpClient: URLSessionHTTPClient())
-        ])
-        coordinator = LyricsCoordinator(
-            provider: provider,
+        self.coordinator = coordinator ?? LyricsCoordinator(
+            provider: LyricsProviderChain(providers: [
+                AppleMusicCacheLyricsProvider(),
+                LRCLIBProvider(httpClient: URLSessionHTTPClient())
+            ]),
             cache: LyricsCache()
         )
         waveformCoordinator.onStateChange = { [weak self] state in
@@ -124,10 +129,13 @@ final class DynasicAppState: ObservableObject {
         musicBackendStatus = "polling"
         updateScheduler.start(
             observe: { [weak self] in await self?.observeOnce() },
-            refreshDisplay: { [weak self] in
+            refreshLyrics: { [weak self] in
                 await self?.refreshViewStateNow()
-                    ?? .milliseconds(Self.playbackPositionRefreshMilliseconds)
-            }
+            },
+            refreshProgress: { [weak self] in
+                await self?.refreshPlaybackProgress() ?? false
+            },
+            lyricsUpdates: { [coordinator] in await coordinator.lyricsUpdates() }
         )
     }
 
@@ -146,10 +154,16 @@ final class DynasicAppState: ObservableObject {
 
     func observeOnceForTesting() async {
         await observeOnce()
+        _ = await refreshViewStateNow()
+        _ = await refreshPlaybackProgress()
     }
 
     func refreshViewStateForTesting() async {
         _ = await refreshViewStateNow()
+    }
+
+    func refreshPlaybackProgressForTesting() async {
+        _ = await refreshPlaybackProgress()
     }
 
     func waitForArtworkForTesting() async {
@@ -157,45 +171,47 @@ final class DynasicAppState: ObservableObject {
     }
 
     func refreshViewState() {
+        if updateScheduler.isRunning {
+            updateScheduler.rescheduleLyrics()
+            return
+        }
         Task { [weak self] in
             _ = await self?.refreshViewStateNow()
         }
     }
 
-    private func refreshViewStateNow() async -> Duration {
-        guard musicBackendStatus != "unavailable" else {
-            return .milliseconds(Self.playbackPositionRefreshMilliseconds)
-        }
+    private func refreshViewStateNow() async -> Duration? {
+        guard musicBackendStatus != "unavailable" else { return nil }
         let display = await coordinator.currentDisplay()
+        guard !Task.isCancelled else { return nil }
         if viewState != display.state {
             viewState = display.state
         }
-        estimatedPlaybackPosition = display.position
-
-        guard let position = display.position,
-              let nextLyricPosition = await coordinator.nextLyricChangePosition(),
+        guard reportedPlaybackState == .playing,
+              let position = display.position,
+              let nextLyricPosition = display.nextLyricChangePosition,
               position.isFinite,
               nextLyricPosition.isFinite else {
-            return .milliseconds(Self.playbackPositionRefreshMilliseconds)
+            return nil
         }
 
-        let millisecondsUntilNextLyric = Int64(
-            ceil(max(0, nextLyricPosition - position) * 1_000)
-        )
-        return .milliseconds(
-            max(
-                Self.minimumLyricRefreshMilliseconds,
-                min(
-                    Self.playbackPositionRefreshMilliseconds,
-                    millisecondsUntilNextLyric
-                )
-            )
-        )
+        return .seconds(max(0.001, nextLyricPosition - position))
+    }
+
+    var estimatedPlaybackPosition: TimeInterval? { playbackPresentation.position }
+
+    private func refreshPlaybackProgress() async -> Bool {
+        let position = musicBackendStatus == "unavailable"
+            ? nil : await coordinator.currentPosition()
+        guard !Task.isCancelled else { return false }
+        playbackPresentation.update(position: position)
+        return reportedPlaybackState == .playing
     }
 
     private func observeOnce() async {
         do {
             let snapshot = try await musicBackend.snapshot()
+            guard !Task.isCancelled else { return }
             reportedPlaybackState = snapshot.state
             reportedPlaybackPosition = snapshot.position
             lastObservationLatency = snapshot.observationLatency
@@ -204,14 +220,15 @@ final class DynasicAppState: ObservableObject {
             musicBackendStatus = "connected"
 
             await coordinator.process(snapshot: snapshot)
-            _ = await refreshViewStateNow()
+            guard !Task.isCancelled else { return }
             updateArtwork(for: snapshot.track)
             refreshWaveformCapture()
         } catch {
+            guard !Task.isCancelled else { return }
             musicBackendStatus = "unavailable"
             lastObservationError = String(describing: error)
             viewState = .musicUnavailable
-            estimatedPlaybackPosition = nil
+            playbackPresentation.update(position: nil)
             reportedPlaybackState = nil
             updateArtwork(for: nil)
             refreshWaveformCapture()

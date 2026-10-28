@@ -17,7 +17,10 @@ final class AppUpdateScheduler {
     private let observationInterval: Duration
     private let clock: any AppUpdateClock
     private var observationTask: Task<Void, Never>?
-    private var displayTask: Task<Void, Never>?
+    private var lyricTask: Task<Void, Never>?
+    private var progressTask: Task<Void, Never>?
+    private var lyricsUpdatesTask: Task<Void, Never>?
+    private var refreshLyrics: (@MainActor () async -> Duration?)?
 
     init(
         observationInterval: Duration = .seconds(1),
@@ -29,7 +32,9 @@ final class AppUpdateScheduler {
 
     deinit {
         observationTask?.cancel()
-        displayTask?.cancel()
+        lyricTask?.cancel()
+        progressTask?.cancel()
+        lyricsUpdatesTask?.cancel()
     }
 
     var isRunning: Bool {
@@ -38,29 +43,61 @@ final class AppUpdateScheduler {
 
     func start(
         observe: @escaping @MainActor () async -> Void,
-        refreshDisplay: @escaping @MainActor () async -> Duration
+        refreshLyrics: @escaping @MainActor () async -> Duration?,
+        refreshProgress: @escaping @MainActor () async -> Bool,
+        lyricsUpdates: @escaping @Sendable () async -> AsyncStream<Void>
     ) {
         guard observationTask == nil else { return }
+        self.refreshLyrics = refreshLyrics
 
-        observationTask = Task {
-            await observe()
+        observationTask = Task { [weak self, clock, observationInterval] in
             while !Task.isCancelled {
+                await observe()
+                guard !Task.isCancelled else { return }
+                self?.rescheduleLyrics()
+                self?.restartProgress(refreshProgress)
                 do {
                     try await clock.sleep(for: observationInterval)
                 } catch {
                     break
                 }
-                await observe()
             }
         }
 
-        displayTask = Task {
+        lyricsUpdatesTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            let updates = await lyricsUpdates()
+            for await _ in updates {
+                guard !Task.isCancelled else { return }
+                self?.rescheduleLyrics()
+            }
+        }
+    }
+
+    func rescheduleLyrics() {
+        lyricTask?.cancel()
+        guard isRunning, let refreshLyrics else { return }
+        lyricTask = Task { [clock] in
             while !Task.isCancelled {
-                let nextRefresh = await refreshDisplay()
+                guard let delay = await refreshLyrics(), !Task.isCancelled else { return }
                 do {
-                    try await clock.sleep(for: nextRefresh)
+                    try await clock.sleep(for: delay)
                 } catch {
-                    break
+                    return
+                }
+            }
+        }
+    }
+
+    private func restartProgress(_ refresh: @escaping @MainActor () async -> Bool) {
+        progressTask?.cancel()
+        progressTask = Task { [clock] in
+            while !Task.isCancelled {
+                guard await refresh(), !Task.isCancelled else { return }
+                do {
+                    try await clock.sleep(for: .milliseconds(500))
+                } catch {
+                    return
                 }
             }
         }
@@ -69,7 +106,12 @@ final class AppUpdateScheduler {
     func stop() {
         observationTask?.cancel()
         observationTask = nil
-        displayTask?.cancel()
-        displayTask = nil
+        lyricTask?.cancel()
+        lyricTask = nil
+        progressTask?.cancel()
+        progressTask = nil
+        lyricsUpdatesTask?.cancel()
+        lyricsUpdatesTask = nil
+        refreshLyrics = nil
     }
 }

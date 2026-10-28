@@ -8,6 +8,45 @@ import LyricsCore
 
 @MainActor
 final class DynasicAppStateTests: XCTestCase {
+    func testProgressTicksDoNotInvalidateLyricsState() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let track = TrackMetadata(title: "Timing", artist: "Test")
+        let cache = LyricsCache(directory: directory)
+        _ = await cache.store(Lyrics(lines: [
+            LyricLine(timestamp: 0, text: "First"),
+            LyricLine(timestamp: 10, text: "Next")
+        ]), for: track)
+        let timeSource = ManualPlaybackTimeSource()
+        let state = DynasicAppState(
+            userDefaults: UserDefaults(suiteName: "dynasic-progress-\(UUID().uuidString)")!,
+            musicBackend: StubObservationBackend(snapshot: PlaybackSnapshot(
+                track: track, state: .playing, position: 0, observedAt: ContinuousClock().now
+            )),
+            artworkProvider: RecordingArtworkProvider(),
+            coordinator: LyricsCoordinator(
+                provider: NoLyricsProvider(), cache: cache,
+                playbackClock: PlaybackClock(timeSource: timeSource)
+            )
+        )
+        await state.observeOnceForTesting()
+        await state.waitForArtworkForTesting()
+        let originalLyrics = state.viewState
+        var appChanges = 0
+        var progressChanges = 0
+        let appSubscription = state.objectWillChange.sink { appChanges += 1 }
+        let progressSubscription = state.playbackPresentation.objectWillChange.sink { progressChanges += 1 }
+
+        timeSource.advance(by: 0.5)
+        await state.refreshPlaybackProgressForTesting()
+
+        XCTAssertEqual(state.estimatedPlaybackPosition, 0.5)
+        XCTAssertEqual(state.viewState, originalLyrics)
+        XCTAssertEqual(appChanges, 0)
+        XCTAssertEqual(progressChanges, 1)
+        withExtendedLifetime((appSubscription, progressSubscription)) {}
+    }
+
     func testWaveformFramesDoNotInvalidateWholeAppState() {
         let state = DynasicAppState(
             userDefaults: UserDefaults(
@@ -305,6 +344,172 @@ final class DynasicAppStateTests: XCTestCase {
         XCTAssertEqual(requests, [firstTrack, secondTrack])
         XCTAssertNotNil(state.trackArtwork)
     }
+}
+
+@MainActor
+final class AppUpdateSchedulerTests: XCTestCase {
+    func testProgressTicksDoNotRefreshLyricsBeforeTheirDeadline() async {
+        let clock = ManualAppUpdateClock()
+        let scheduler = AppUpdateScheduler(observationInterval: .seconds(100), clock: clock)
+        let (updates, continuation) = AsyncStream<Void>.makeStream()
+        defer { continuation.finish(); scheduler.stop() }
+        var observations = 0
+        var lyricRefreshes = 0
+        var progressRefreshes = 0
+        let boundary = expectation(description: "Lyric boundary")
+        scheduler.start(
+            observe: { observations += 1 },
+            refreshLyrics: {
+                lyricRefreshes += 1
+                if lyricRefreshes == 2 {
+                    boundary.fulfill()
+                    return nil
+                }
+                return .seconds(10)
+            },
+            refreshProgress: { progressRefreshes += 1; return true },
+            lyricsUpdates: { updates }
+        )
+        await clock.waitForSleepCount(3)
+
+        await clock.advance(by: .milliseconds(500))
+        await clock.waitForSleepCount(4)
+        XCTAssertEqual(progressRefreshes, 2)
+        XCTAssertEqual(lyricRefreshes, 1)
+        XCTAssertEqual(observations, 1)
+
+        await clock.advance(by: .milliseconds(9_500))
+        await fulfillment(of: [boundary], timeout: 1)
+        XCTAssertEqual(lyricRefreshes, 2)
+        scheduler.stop()
+        await clock.waitForPendingCount(0)
+    }
+
+    func testPauseSeekTrackChangeAndLoadEventsReplaceOldLyricWaits() async {
+        let clock = ManualAppUpdateClock()
+        let scheduler = AppUpdateScheduler(observationInterval: .seconds(100), clock: clock)
+        let (updates, continuation) = AsyncStream<Void>.makeStream()
+        defer { continuation.finish(); scheduler.stop() }
+        var delay: Duration? = .seconds(10)
+        var refreshes = 0
+        let paused = expectation(description: "Paused without a lyric timer")
+        let changedTrack = expectation(description: "New track boundary")
+        scheduler.start(
+            observe: {},
+            refreshLyrics: {
+                refreshes += 1
+                if refreshes == 2 { paused.fulfill() }
+                if refreshes == 5 {
+                    delay = nil
+                    changedTrack.fulfill()
+                }
+                return delay
+            },
+            refreshProgress: { false },
+            lyricsUpdates: { updates }
+        )
+        await clock.waitForSleepCount(2)
+
+        delay = nil
+        scheduler.rescheduleLyrics()
+        await fulfillment(of: [paused], timeout: 1)
+        await clock.waitForPendingCount(1)
+
+        // Resume/seek schedules an earlier boundary, then a track change replaces it.
+        delay = .seconds(2)
+        scheduler.rescheduleLyrics()
+        await clock.waitForSleepCount(3)
+        delay = .seconds(4)
+        scheduler.rescheduleLyrics()
+        await clock.waitForSleepCount(4)
+        await clock.waitForPendingCount(2)
+        await clock.advance(by: .seconds(2))
+        XCTAssertEqual(refreshes, 4)
+        await clock.advance(by: .seconds(2))
+        await fulfillment(of: [changedTrack], timeout: 1)
+
+        delay = .seconds(3)
+        continuation.yield(())
+        await clock.waitForSleepCount(5)
+        XCTAssertEqual(refreshes, 6)
+        scheduler.stop()
+        await clock.waitForPendingCount(0)
+    }
+}
+
+private actor ManualAppUpdateClock: AppUpdateClock {
+    private var now: Duration = .zero
+    private var sleeps: [UUID: (deadline: Duration, continuation: CheckedContinuation<Void, Error>)] = [:]
+    private var sleepCount = 0
+    private var countWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var pendingWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func sleep(for duration: Duration) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                sleeps[id] = (now + duration, continuation)
+                sleepCount += 1
+                notifyWaiters()
+            }
+        } onCancel: {
+            Task { await self.cancel(id) }
+        }
+    }
+
+    func advance(by duration: Duration) {
+        now += duration
+        let ready = sleeps.filter { $0.value.deadline <= now }
+        for (id, sleeper) in ready {
+            sleeps.removeValue(forKey: id)
+            sleeper.continuation.resume()
+        }
+        notifyWaiters()
+    }
+
+    func waitForSleepCount(_ count: Int) async {
+        guard sleepCount < count else { return }
+        await withCheckedContinuation { countWaiters.append((count, $0)) }
+    }
+
+    func waitForPendingCount(_ count: Int) async {
+        guard sleeps.count != count else { return }
+        await withCheckedContinuation { pendingWaiters.append((count, $0)) }
+    }
+
+    private func cancel(_ id: UUID) {
+        sleeps.removeValue(forKey: id)?.continuation.resume(throwing: CancellationError())
+        notifyWaiters()
+    }
+
+    private func notifyWaiters() {
+        countWaiters.removeAll { count, continuation in
+            guard sleepCount >= count else { return false }
+            continuation.resume()
+            return true
+        }
+        pendingWaiters.removeAll { count, continuation in
+            guard sleeps.count == count else { return false }
+            continuation.resume()
+            return true
+        }
+    }
+}
+
+private final class ManualPlaybackTimeSource: MonotonicTimeSource, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: TimeInterval = 0
+
+    func now() -> TimeInterval { lock.withLock { value } }
+    func advance(by seconds: TimeInterval) { lock.withLock { value += seconds } }
+}
+
+private struct NoLyricsProvider: LyricsProvider {
+    func lyrics(for track: TrackMetadata) async throws -> Lyrics? { nil }
 }
 
 @MainActor
